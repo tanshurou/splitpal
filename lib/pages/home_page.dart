@@ -1,0 +1,41 @@
+import 'package:flutter/material.dart';
+import 'package:splitpal/bottom_nav_bar.dart';
+import 'package:splitpal/pages/group_page.dart';
+import 'package:splitpal/pages/history_page.dart';
+import 'package:splitpal/pages/personal_dashboard_page.dart';
+import 'package:splitpal/pages/settings_page.dart';
+
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  int _selectedIndex = 0;
+
+  final List<Widget> _pages = [
+    PersonalDashboardPage(),
+    GroupPage(),
+    HistoryPage(),
+    SettingsPage(),
+  ];
+
+  void navigateBottomBar(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      bottomNavigationBar: BottomNavBar(
+        onTabChange: (index) => navigateBottomBar(index),
+      ),
+      body: _pages[_selectedIndex],
+    );
+  }
+}
