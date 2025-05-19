@@ -69,6 +69,7 @@ class _SettleDebtPageState extends State<SettleDebtPage> {
                     trailing: ElevatedButton(
                       onPressed: () async {
                         await _service.settleDebt(d.id);
+                        // ignore: use_build_context_synchronously
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text('Settled "${d.title}"!')),
                         );
