@@ -4,6 +4,7 @@ import 'package:splitpal/pages/group_page.dart';
 import 'package:splitpal/pages/history_page.dart';
 import 'package:splitpal/pages/personal_dashboard_page.dart';
 import 'package:splitpal/pages/settings_page.dart';
+import 'package:splitpal/pages/settle_debt_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -20,6 +21,7 @@ class _HomePageState extends State<HomePage> {
     GroupPage(),
     HistoryPage(),
     SettingsPage(),
+    SettleDebtPage(),
   ];
 
   void navigateBottomBar(int index) {

@@ -40,6 +40,8 @@ class BottomNavBar extends StatelessWidget {
             GButton(icon: Icons.history_rounded, text: 'History'),
 
             GButton(icon: Icons.settings_rounded, text: 'Settings'),
+
+            GButton(icon: Icons.attach_money_rounded, text: 'Settle'),
           ],
         ),
       ),
