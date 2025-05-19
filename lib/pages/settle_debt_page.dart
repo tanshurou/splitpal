@@ -2,9 +2,12 @@
 import 'package:flutter/material.dart';
 import '../models/debt.dart';
 import '../services/debt_service.dart';
+import '../widgets/debt_card.dart';
+import 'payment_page.dart';
 
 class SettleDebtPage extends StatefulWidget {
   const SettleDebtPage({super.key});
+
   @override
   State<SettleDebtPage> createState() => _SettleDebtPageState();
 }
@@ -27,14 +30,21 @@ class _SettleDebtPageState extends State<SettleDebtPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Settle Debt')),
+      appBar: AppBar(
+        title: const Text('Settle Debt'),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black87,
+        elevation: 1,
+      ),
       body: FutureBuilder<List<Debt>>(
         future: _debtsFuture,
         builder: (ctx, snap) {
           if (snap.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
           }
+
           final debts = snap.data ?? [];
+
           if (debts.isEmpty) {
             return RefreshIndicator(
               onRefresh: _refresh,
@@ -44,40 +54,76 @@ class _SettleDebtPageState extends State<SettleDebtPage> {
                   Center(
                     child: Text(
                       'No debts to settle',
-                      style: TextStyle(fontSize: 18),
+                      style: TextStyle(fontSize: 18, color: Colors.grey),
                     ),
                   ),
                 ],
               ),
             );
           }
+
+          // 1) Compute totals
+          final totalOwe = debts
+              .where((d) => d.iOwe)
+              .fold(0.0, (sum, d) => sum + d.amount);
+          final totalDue = debts
+              .where((d) => !d.iOwe)
+              .fold(0.0, (sum, d) => sum + d.amount);
+
+          // 2) Build header + list of DebtCards
           return RefreshIndicator(
             onRefresh: _refresh,
             child: ListView.builder(
-              itemCount: debts.length,
-              itemBuilder: (_, i) {
-                final d = debts[i];
-                return Card(
-                  color: d.iOwe ? Colors.red[50] : Colors.green[50],
-                  margin: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  child: ListTile(
-                    title: Text(d.title),
-                    subtitle: Text('\$${d.amount.toStringAsFixed(2)}'),
-                    trailing: ElevatedButton(
-                      onPressed: () async {
-                        await _service.settleDebt(d.id);
-                        // ignore: use_build_context_synchronously
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Settled "${d.title}"!')),
-                        );
-                        _refresh();
-                      },
-                      child: const Text('Pay Now'),
+              itemCount: debts.length + 1, // +1 for the header
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  // Summary header
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
                     ),
-                  ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'You owe \$${totalOwe.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            'You’re owed \$${totalDue.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                final debt = debts[index - 1]; // shift past header
+                return DebtCard(
+                  debt: debt,
+                  onPay: () async {
+                    final paid = await Navigator.push<bool>(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => PaymentPage(debt: debt),
+                      ),
+                    );
+                    if (paid == true) {
+                      // refresh the list immediately
+                      setState(() {
+                        _debtsFuture = _service.fetchDebts();
+                      });
+                    }
+                  },
                 );
               },
             ),
