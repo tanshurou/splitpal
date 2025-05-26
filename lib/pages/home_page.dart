@@ -4,6 +4,8 @@ import 'package:splitpal/pages/group_page.dart';
 import 'package:splitpal/pages/history_page.dart';
 import 'package:splitpal/pages/personal_dashboard_page.dart';
 import 'package:splitpal/pages/settings_page.dart';
+import 'package:splitpal/pages/settle_debt_page.dart';
+import 'package:splitpal/pages/profile_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -20,6 +22,8 @@ class _HomePageState extends State<HomePage> {
     GroupPage(),
     HistoryPage(),
     SettingsPage(),
+    SettleDebtPage(),
+    const ProfilePage(),
   ];
 
   void navigateBottomBar(int index) {
@@ -33,7 +37,8 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       backgroundColor: Colors.white,
       bottomNavigationBar: BottomNavBar(
-        onTabChange: (index) => navigateBottomBar(index),
+        selectedIndex: _selectedIndex, // ← pass the active tab
+        onTabChange: (i) => setState(() => _selectedIndex = i),
       ),
       body: _pages[_selectedIndex],
     );
