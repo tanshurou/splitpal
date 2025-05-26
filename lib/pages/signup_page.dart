@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:splitpal/pages/login_page.dart';
 
 class SignupPage extends StatefulWidget {
@@ -13,6 +14,8 @@ class _SignupPageState extends State<SignupPage> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
+
+  bool _isLoading = false;
 
   bool get _canSignUp {
     final fullNameValid = _fullNameController.text.trim().isNotEmpty;
@@ -31,19 +34,51 @@ class _SignupPageState extends State<SignupPage> {
     super.dispose();
   }
 
-  void _onSignUp() {
+  Future<void> _onSignUp() async {
     final fullName = _fullNameController.text.trim();
     final email = _emailController.text.trim();
+    final password = _passwordController.text;
 
-    // TODO: Add actual sign-up logic here
+    setState(() {
+      _isLoading = true;
+    });
 
-    print('Signed up: $fullName, $email');
+    try {
+      await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
 
-    // After sign up, navigate back to login page
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => const LoginPage()),
-    );
+      // Set the user's display name
+      await FirebaseAuth.instance.currentUser?.updateDisplayName(fullName);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Account created successfully!')),
+      );
+
+      // Navigate back to login
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginPage()),
+      );
+    } on FirebaseAuthException catch (e) {
+      String message = 'Sign up failed. Please try again.';
+      if (e.code == 'email-already-in-use') {
+        message = 'This email is already registered.';
+      } else if (e.code == 'invalid-email') {
+        message = 'That email address is invalid.';
+      } else if (e.code == 'weak-password') {
+        message = 'Password is too weak.';
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -100,13 +135,15 @@ class _SignupPageState extends State<SignupPage> {
                 onChanged: (_) => setState(() {}),
               ),
               const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: _canSignUp ? _onSignUp : null,
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                  child: Text('Sign Up', style: TextStyle(fontSize: 16)),
-                ),
-              ),
+              _isLoading
+                  ? const CircularProgressIndicator()
+                  : ElevatedButton(
+                      onPressed: _canSignUp ? _onSignUp : null,
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                        child: Text('Sign Up', style: TextStyle(fontSize: 16)),
+                      ),
+                    ),
               const SizedBox(height: 16),
               TextButton(
                 onPressed: () {
