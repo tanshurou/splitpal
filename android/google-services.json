@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "154248245250",
+    "project_id": "mae-assignment-g16",
+    "storage_bucket": "mae-assignment-g16.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:154248245250:android:6cf15c41839da2588b771b",
+        "android_client_info": {
+          "package_name": "com.example.splitpal"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBWmLwyTg-vAQsM8lXTM4wIGTJT-3cJh1M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
