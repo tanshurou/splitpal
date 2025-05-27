@@ -1,7 +1,10 @@
+// lib/pages/add_friend_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// Simple User model for placeholder
+/// Simple User model
 class User {
   final String id;
   final String name;
@@ -11,6 +14,7 @@ class User {
 
 class AddFriendPage extends StatefulWidget {
   const AddFriendPage({super.key});
+
   @override
   State<AddFriendPage> createState() => _AddFriendPageState();
 }
@@ -20,32 +24,47 @@ class _AddFriendPageState extends State<AddFriendPage> {
   List<User> _results = [];
   bool _loading = false;
 
-  /// NOW: always fill with this fake placeholder list
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
   Future<void> _doSearch() async {
     final term = _searchCtrl.text.trim();
-    if (term.isEmpty) return;
+    if (term.isEmpty) {
+      setState(() => _results = []);
+      return;
+    }
+    setState(() => _loading = true);
 
-    setState(() {
-      _loading = true;
-    });
+    try {
+      final snap =
+          await FirebaseFirestore.instance
+              .collection('users')
+              .where('email', isEqualTo: term)
+              .limit(1)
+              .get();
 
-    // simulate network latency
-    await Future.delayed(const Duration(milliseconds: 500));
+      final list =
+          snap.docs.map((doc) {
+            final data = doc.data();
+            final email = data['email'] as String;
+            return User(id: doc.id, name: email, email: email);
+          }).toList();
 
-    setState(() {
-      _loading = false;
-      // **FAKE** placeholder list
-      _results = [
-        User(id: '1', name: 'John Doe', email: 'john@example.com'),
-        User(id: '2', name: 'Jane Smith', email: 'jane@example.com'),
-        User(id: '3', name: 'Placeholder Guy', email: 'foo@bar.com'),
-      ];
-    });
+      setState(() => _results = list);
+    } catch (e) {
+      debugPrint('Firestore search error: $e');
+      setState(() => _results = []);
+    } finally {
+      setState(() => _loading = false);
+    }
   }
 
   void _sendRequest(User u) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Pretend friend request sent to ${u.name}')),
+      SnackBar(content: Text('Friend request sent to ${u.email}!')),
     );
   }
 
@@ -100,7 +119,7 @@ class _AddFriendPageState extends State<AddFriendPage> {
                     controller: _searchCtrl,
                     style: GoogleFonts.poppins(),
                     decoration: InputDecoration(
-                      hintText: 'Search by name or email',
+                      hintText: 'Search by email',
                       hintStyle: GoogleFonts.poppins(color: Colors.black38),
                       filled: true,
                       fillColor: Colors.grey.shade100,
@@ -149,14 +168,22 @@ class _AddFriendPageState extends State<AddFriendPage> {
             ),
           ),
 
-          // ─── RESULTS LIST ────────────────
+          // ─── RESULTS ─────────────────────
           Expanded(
             child:
-                _results.isEmpty && !_loading
-                    // show instruction if nothing yet
+                _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _searchCtrl.text.trim().isEmpty
                     ? Center(
                       child: Text(
-                        'Enter a name or email above',
+                        'Enter an email above',
+                        style: GoogleFonts.poppins(color: Colors.black38),
+                      ),
+                    )
+                    : _results.isEmpty
+                    ? Center(
+                      child: Text(
+                        'No users found',
                         style: GoogleFonts.poppins(color: Colors.black38),
                       ),
                     )
@@ -172,17 +199,15 @@ class _AddFriendPageState extends State<AddFriendPage> {
                             borderRadius: BorderRadius.circular(16),
                           ),
                           child: ListTile(
-                            leading: CircleAvatar(child: Text(u.name[0])),
+                            leading: CircleAvatar(
+                              child: Text(u.email[0].toUpperCase()),
+                            ),
                             title: Text(
-                              u.name,
+                              u.email,
                               style: GoogleFonts.poppins(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
                               ),
-                            ),
-                            subtitle: Text(
-                              u.email,
-                              style: GoogleFonts.poppins(),
                             ),
                             trailing: ElevatedButton(
                               onPressed: () => _sendRequest(u),

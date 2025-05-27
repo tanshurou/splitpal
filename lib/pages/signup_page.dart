@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // ← add this
 import 'package:splitpal/pages/login_page.dart';
 
 class SignupPage extends StatefulWidget {
@@ -13,7 +14,8 @@ class _SignupPageState extends State<SignupPage> {
   final TextEditingController _fullNameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _confirmPasswordController = TextEditingController();
+  final TextEditingController _confirmPasswordController =
+      TextEditingController();
 
   bool _isLoading = false;
 
@@ -21,7 +23,8 @@ class _SignupPageState extends State<SignupPage> {
     final fullNameValid = _fullNameController.text.trim().isNotEmpty;
     final emailValid = _emailController.text.contains('@');
     final passwordValid = _passwordController.text.length >= 6;
-    final passwordsMatch = _passwordController.text == _confirmPasswordController.text;
+    final passwordsMatch =
+        _passwordController.text == _confirmPasswordController.text;
     return fullNameValid && emailValid && passwordValid && passwordsMatch;
   }
 
@@ -39,24 +42,30 @@ class _SignupPageState extends State<SignupPage> {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
-      await FirebaseAuth.instance.createUserWithEmailAndPassword(
+      // 1) Create Firebase Auth user
+      final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
 
-      // Set the user's display name
-      await FirebaseAuth.instance.currentUser?.updateDisplayName(fullName);
+      // 2) Set the user's display name (optional)
+      await cred.user?.updateDisplayName(fullName);
 
+      // 3) Write to Firestore under "users/{uid}" with just email field
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(cred.user!.uid)
+          .set({'email': email});
+
+      // 4) Notify success
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Account created successfully!')),
       );
 
-      // Navigate back to login
+      // 5) Navigate to login
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const LoginPage()),
@@ -70,14 +79,11 @@ class _SignupPageState extends State<SignupPage> {
       } else if (e.code == 'weak-password') {
         message = 'Password is too weak.';
       }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
     }
   }
 
@@ -138,20 +144,24 @@ class _SignupPageState extends State<SignupPage> {
               _isLoading
                   ? const CircularProgressIndicator()
                   : ElevatedButton(
-                      onPressed: _canSignUp ? _onSignUp : null,
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                        child: Text('Sign Up', style: TextStyle(fontSize: 16)),
+                    onPressed: _canSignUp ? _onSignUp : null,
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 32,
+                        vertical: 12,
                       ),
+                      child: Text('Sign Up', style: TextStyle(fontSize: 16)),
                     ),
+                  ),
               const SizedBox(height: 16),
               TextButton(
-                onPressed: () {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (context) => const LoginPage()),
-                  );
-                },
+                onPressed:
+                    () => Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const LoginPage(),
+                      ),
+                    ),
                 child: const Text('Already have an account? Login'),
               ),
             ],
