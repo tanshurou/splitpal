@@ -1,10 +1,11 @@
 // lib/pages/profile_page.dart
 
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:splitpal/pages/add_friend_page.dart';
 import 'package:splitpal/pages/banking_details_page.dart';
-import '../pages/currency_settings_page.dart'; // add this import
+import 'package:splitpal/pages/currency_settings_page.dart';
 import 'package:splitpal/pages/notification_settings_page.dart';
 
 class ProfilePage extends StatelessWidget {
@@ -12,18 +13,18 @@ class ProfilePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Theme colors
+    final user = FirebaseAuth.instance.currentUser;
+
     const bgColor = Color(0xFFF8F8FB);
     const gradientStart = Color(0xFF7B5FFF);
     const gradientEnd = Color(0xFFFB56A5);
-    const tileBg = Colors.white;
     const iconColor = Color(0xFF7B5FFF);
 
     return Scaffold(
       backgroundColor: bgColor,
       body: Column(
         children: [
-          // ─── HEADER ─────────────────────────────
+          // HEADER
           Container(
             width: double.infinity,
             padding: const EdgeInsets.only(top: 60, bottom: 40),
@@ -37,18 +38,14 @@ class ProfilePage extends StatelessWidget {
             ),
             child: Column(
               children: [
-                CircleAvatar(
+                const CircleAvatar(
                   radius: 48,
                   backgroundColor: Colors.white24,
-                  child: const Icon(
-                    Icons.person,
-                    size: 48,
-                    color: Colors.white,
-                  ),
+                  child: Icon(Icons.person, size: 48, color: Colors.white),
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Username',
+                  user?.email ?? 'Guest',
                   style: GoogleFonts.poppins(
                     fontSize: 22,
                     color: Colors.white,
@@ -59,21 +56,12 @@ class ProfilePage extends StatelessWidget {
             ),
           ),
 
-          // ─── MENU ───────────────────────────────
+          // MENU (Manage Account removed)
           Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
               child: ListView(
                 children: [
-                  _ProfileTile(
-                    icon: Icons.person_outline,
-                    label: 'Manage Account',
-                    iconColor: iconColor,
-                    onTap: () {
-                      /* TODO */
-                    },
-                  ),
-                  const SizedBox(height: 12),
                   _ProfileTile(
                     icon: Icons.person_add_alt_outlined,
                     label: 'Add a Friend',
@@ -135,6 +123,7 @@ class ProfilePage extends StatelessWidget {
   }
 }
 
+/// A reusable ListTile‐style widget
 class _ProfileTile extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -162,7 +151,7 @@ class _ProfileTile extends StatelessWidget {
           label,
           style: GoogleFonts.poppins(fontSize: 16, color: Colors.black87),
         ),
-        trailing: Icon(Icons.chevron_right, color: Colors.black26),
+        trailing: const Icon(Icons.chevron_right, color: Colors.black26),
       ),
     );
   }
