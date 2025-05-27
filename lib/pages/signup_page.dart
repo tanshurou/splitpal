@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // ← add this
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:splitpal/pages/login_page.dart';
 
 class SignupPage extends StatefulWidget {
@@ -14,17 +14,18 @@ class _SignupPageState extends State<SignupPage> {
   final TextEditingController _fullNameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _confirmPasswordController =
-      TextEditingController();
+  final TextEditingController _confirmPasswordController = TextEditingController();
 
   bool _isLoading = false;
+  bool _passwordsMismatch = false;
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
 
   bool get _canSignUp {
     final fullNameValid = _fullNameController.text.trim().isNotEmpty;
     final emailValid = _emailController.text.contains('@');
     final passwordValid = _passwordController.text.length >= 6;
-    final passwordsMatch =
-        _passwordController.text == _confirmPasswordController.text;
+    final passwordsMatch = _passwordController.text == _confirmPasswordController.text;
     return fullNameValid && emailValid && passwordValid && passwordsMatch;
   }
 
@@ -42,30 +43,34 @@ class _SignupPageState extends State<SignupPage> {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
-    setState(() => _isLoading = true);
+    if (_passwordController.text != _confirmPasswordController.text) {
+      setState(() => _passwordsMismatch = true);
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _passwordsMismatch = false;
+    });
 
     try {
-      // 1) Create Firebase Auth user
       final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
 
-      // 2) Set the user's display name (optional)
       await cred.user?.updateDisplayName(fullName);
 
-      // 3) Write to Firestore under "users/{uid}" with just email field
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(cred.user!.uid)
-          .set({'email': email});
+      await FirebaseFirestore.instance.collection('users').doc(cred.user!.uid).set({
+        'email': email,
+        'fullName': fullName,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
 
-      // 4) Notify success
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Account created successfully!')),
       );
 
-      // 5) Navigate to login
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const LoginPage()),
@@ -79,9 +84,8 @@ class _SignupPageState extends State<SignupPage> {
       } else if (e.code == 'weak-password') {
         message = 'Password is too weak.';
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
+
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     } finally {
       setState(() => _isLoading = false);
     }
@@ -123,45 +127,83 @@ class _SignupPageState extends State<SignupPage> {
               const SizedBox(height: 16),
               TextField(
                 controller: _passwordController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Password',
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _obscurePassword = !_obscurePassword;
+                      });
+                    },
+                  ),
                 ),
-                obscureText: true,
-                onChanged: (_) => setState(() {}),
+                obscureText: _obscurePassword,
+                onChanged: (_) {
+                  setState(() {
+                    _passwordsMismatch = _passwordController.text != _confirmPasswordController.text;
+                  });
+                },
               ),
               const SizedBox(height: 16),
-              TextField(
-                controller: _confirmPasswordController,
-                decoration: const InputDecoration(
-                  labelText: 'Confirm Password',
-                  border: OutlineInputBorder(),
-                ),
-                obscureText: true,
-                onChanged: (_) => setState(() {}),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: _confirmPasswordController,
+                    decoration: InputDecoration(
+                      labelText: 'Confirm Password',
+                      border: const OutlineInputBorder(),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscureConfirmPassword = !_obscureConfirmPassword;
+                          });
+                        },
+                      ),
+                    ),
+                    obscureText: _obscureConfirmPassword,
+                    onChanged: (_) {
+                      setState(() {
+                        _passwordsMismatch =
+                            _passwordController.text != _confirmPasswordController.text;
+                      });
+                    },
+                  ),
+                  if (_passwordsMismatch)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8.0),
+                      child: Text(
+                        'Passwords do not match',
+                        style: TextStyle(color: Colors.red, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(height: 24),
               _isLoading
                   ? const CircularProgressIndicator()
                   : ElevatedButton(
-                    onPressed: _canSignUp ? _onSignUp : null,
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 32,
-                        vertical: 12,
+                      onPressed: _canSignUp ? _onSignUp : null,
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                        child: Text('Sign Up', style: TextStyle(fontSize: 16)),
                       ),
-                      child: Text('Sign Up', style: TextStyle(fontSize: 16)),
                     ),
-                  ),
               const SizedBox(height: 16),
               TextButton(
-                onPressed:
-                    () => Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const LoginPage(),
-                      ),
-                    ),
+                onPressed: () {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (context) => const LoginPage()),
+                  );
+                },
                 child: const Text('Already have an account? Login'),
               ),
             ],

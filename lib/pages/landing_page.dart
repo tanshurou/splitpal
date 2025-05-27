@@ -8,58 +8,72 @@ class LandingPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[200],
-      body: GestureDetector(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const LoginPage()),
-          );
-        },
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Logo Image
-                Image.asset(
-                  'assets/images/splitpal_logo.png',
-                  width: 180,
-                  height: 180,
-                ),
-                const SizedBox(height: 24),
+      backgroundColor: const Color(0xFFF4F3FD), // Soft purple like the reference
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Large Logo
+              Image.asset(
+                'assets/images/splitpal_logo.png',
+                width: 220,
+                height: 220,
+              ),
+              const SizedBox(height: 32),
 
-                // App title
-                const Text(
-                  'SplitPal',
-                  style: TextStyle(
-                    fontSize: 36,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
+              // App Name
+              Text(
+                'SplitPal',
+                style: GoogleFonts.poppins(
+                  fontSize: 38,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF1F1F1F),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Tagline
+              Text(
+                'SplitPal helps you split expenses fairly with friends — no more awkward paybacks!',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  color: Colors.grey[700],
+                ),
+              ),
+              const SizedBox(height: 48),
+
+              // Get Started Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const LoginPage()),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF756EF3), // Vibrant purple
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    elevation: 4,
+                  ),
+                  child: Text(
+                    'Get Started',
+                    style: GoogleFonts.poppins(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 12),
-
-                // Description
-                const Text(
-                  'SplitPal helps you split expenses fairly\nwith friends — no more awkward paybacks!',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 16, color: Colors.black54),
-                ),
-                const SizedBox(height: 40),
-
-                // Press anywhere message
-                const Text(
-                  'Press anywhere to start',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

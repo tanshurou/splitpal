@@ -15,6 +15,8 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController _passwordController = TextEditingController();
 
   bool _isLoading = false;
+  bool _obscurePassword = true;
+  String? _errorMessage;
 
   bool get _canLogin =>
       _emailController.text.contains('@') &&
@@ -33,6 +35,7 @@ class _LoginPageState extends State<LoginPage> {
 
     setState(() {
       _isLoading = true;
+      _errorMessage = null;
     });
 
     try {
@@ -47,16 +50,13 @@ class _LoginPageState extends State<LoginPage> {
         MaterialPageRoute(builder: (context) => const HomePage()),
       );
     } on FirebaseAuthException catch (e) {
-      String message = 'Login failed. Please try again.';
       if (e.code == 'user-not-found') {
-        message = 'No user found for that email.';
+        _errorMessage = 'No user found for that email.';
       } else if (e.code == 'wrong-password') {
-        message = 'Incorrect password.';
+        _errorMessage = 'Incorrect password.';
+      } else {
+        _errorMessage = 'Login failed. Please try again.';
       }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
     } finally {
       setState(() {
         _isLoading = false;
@@ -80,7 +80,6 @@ class _LoginPageState extends State<LoginPage> {
               ),
               const SizedBox(height: 24),
 
-              // Email input
               TextField(
                 controller: _emailController,
                 decoration: const InputDecoration(
@@ -92,33 +91,52 @@ class _LoginPageState extends State<LoginPage> {
               ),
               const SizedBox(height: 16),
 
-              // Password input
               TextField(
                 controller: _passwordController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'Password',
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _obscurePassword = !_obscurePassword;
+                      });
+                    },
+                  ),
                 ),
-                obscureText: true,
+                obscureText: _obscurePassword,
                 onChanged: (_) => setState(() {}),
               ),
+
+              if (_errorMessage != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12.0),
+                  child: Text(
+                    _errorMessage!,
+                    style: const TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+
               const SizedBox(height: 24),
 
-              // Login button or loading spinner
               _isLoading
                   ? const CircularProgressIndicator()
                   : ElevatedButton(
                       onPressed: _canLogin ? _onLogin : null,
                       style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 32, vertical: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
                       ),
                       child: const Text('Login', style: TextStyle(fontSize: 16)),
                     ),
 
               const SizedBox(height: 16),
 
-              // Sign up redirect
               TextButton(
                 onPressed: () {
                   Navigator.push(
