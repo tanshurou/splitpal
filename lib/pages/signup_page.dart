@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:splitpal/pages/home_page.dart';
 import 'package:splitpal/pages/login_page.dart';
 
 class SignupPage extends StatefulWidget {
@@ -67,13 +68,10 @@ class _SignupPageState extends State<SignupPage> {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Account created successfully!')),
-      );
-
+      // ✅ Auto-login and go to HomePage
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const LoginPage()),
+        MaterialPageRoute(builder: (context) => const HomePage()),
       );
     } on FirebaseAuthException catch (e) {
       String message = 'Sign up failed. Please try again.';
@@ -144,7 +142,8 @@ class _SignupPageState extends State<SignupPage> {
                 obscureText: _obscurePassword,
                 onChanged: (_) {
                   setState(() {
-                    _passwordsMismatch = _passwordController.text != _confirmPasswordController.text;
+                    _passwordsMismatch =
+                        _passwordController.text != _confirmPasswordController.text;
                   });
                 },
               ),
