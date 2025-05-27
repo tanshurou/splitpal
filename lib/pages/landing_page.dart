@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:splitpal/pages/login_page.dart';
 
 class LandingPage extends StatelessWidget {
@@ -44,10 +45,7 @@ class LandingPage extends StatelessWidget {
                 const Text(
                   'SplitPal helps you split expenses fairly\nwith friends — no more awkward paybacks!',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.black54,
-                  ),
+                  style: TextStyle(fontSize: 16, color: Colors.black54),
                 ),
                 const SizedBox(height: 40),
 
