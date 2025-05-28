@@ -1,12 +1,15 @@
 // lib/pages/settle_debt_page.dart
+
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+
 import '../models/debt.dart';
 import '../services/debt_service.dart';
-import '../widgets/debt_card.dart';
+import '../models/payment_method.dart';
 import 'payment_page.dart';
 
 class SettleDebtPage extends StatefulWidget {
-  const SettleDebtPage({super.key});
+  const SettleDebtPage({Key? key}) : super(key: key);
 
   @override
   State<SettleDebtPage> createState() => _SettleDebtPageState();
@@ -23,8 +26,39 @@ class _SettleDebtPageState extends State<SettleDebtPage> {
   }
 
   Future<void> _refresh() async {
-    setState(() => _debtsFuture = _service.fetchDebts());
-    await _debtsFuture;
+    // do the work first
+    final next = _service.fetchDebts();
+    // then update state synchronously
+    setState(() {
+      _debtsFuture = next;
+    });
+    // now await so pull-to-refresh spinner works
+    await next;
+  }
+
+  void _goToPayment(Debt d) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder:
+            (_) => PaymentPage(
+              debt: d,
+              onSelected: (method) async {
+                await _service.settleDebt(d.id);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Settled "${d.title}" with ${method.name}',
+                      style: GoogleFonts.poppins(),
+                    ),
+                  ),
+                );
+                Navigator.pop(context); // back from PaymentPage
+                _refresh(); // reload debts
+              },
+            ),
+      ),
+    );
   }
 
   @override
@@ -32,9 +66,16 @@ class _SettleDebtPageState extends State<SettleDebtPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Settle Debt'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
-        elevation: 1,
+        leading: const BackButton(),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.poppins(color: Colors.white),
+            ),
+          ),
+        ],
       ),
       body: FutureBuilder<List<Debt>>(
         future: _debtsFuture,
@@ -42,9 +83,7 @@ class _SettleDebtPageState extends State<SettleDebtPage> {
           if (snap.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
           }
-
           final debts = snap.data ?? [];
-
           if (debts.isEmpty) {
             return RefreshIndicator(
               onRefresh: _refresh,
@@ -54,76 +93,40 @@ class _SettleDebtPageState extends State<SettleDebtPage> {
                   Center(
                     child: Text(
                       'No debts to settle',
-                      style: TextStyle(fontSize: 18, color: Colors.grey),
+                      style: TextStyle(fontSize: 18),
                     ),
                   ),
                 ],
               ),
             );
           }
-
-          // 1) Compute totals
-          final totalOwe = debts
-              .where((d) => d.iOwe)
-              .fold(0.0, (sum, d) => sum + d.amount);
-          final totalDue = debts
-              .where((d) => !d.iOwe)
-              .fold(0.0, (sum, d) => sum + d.amount);
-
-          // 2) Build header + list of DebtCards
           return RefreshIndicator(
             onRefresh: _refresh,
             child: ListView.builder(
-              itemCount: debts.length + 1, // +1 for the header
-              itemBuilder: (context, index) {
-                if (index == 0) {
-                  // Summary header
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
+              itemCount: debts.length,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemBuilder: (ctx, i) {
+                final d = debts[i];
+                return Card(
+                  color: d.iOwe ? Colors.red[50] : Colors.green[50],
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  child: ListTile(
+                    title: Text(
+                      d.title,
+                      style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
                     ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'You owe \$${totalOwe.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: Text(
-                            'You’re owed \$${totalDue.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
+                    subtitle: Text(
+                      '\$${d.amount.toStringAsFixed(2)}',
+                      style: GoogleFonts.poppins(),
                     ),
-                  );
-                }
-                final debt = debts[index - 1]; // shift past header
-                return DebtCard(
-                  debt: debt,
-                  onPay: () async {
-                    final paid = await Navigator.push<bool>(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => PaymentPage(debt: debt),
-                      ),
-                    );
-                    if (paid == true) {
-                      // refresh the list immediately
-                      setState(() {
-                        _debtsFuture = _service.fetchDebts();
-                      });
-                    }
-                  },
+                    trailing: ElevatedButton(
+                      onPressed: () => _goToPayment(d),
+                      child: const Text('Pay Now'),
+                    ),
+                  ),
                 );
               },
             ),

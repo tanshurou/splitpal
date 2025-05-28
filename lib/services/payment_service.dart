@@ -1,22 +1,39 @@
 // lib/services/payment_service.dart
 
-import '../pages/banking_details_page.dart'; // for PaymentMethod
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../models/payment_method.dart'; // ← import the model here
 
 class PaymentService {
-  // 1) Singleton boilerplate
   PaymentService._();
-  static final PaymentService instance = PaymentService._();
+  static final instance = PaymentService._();
 
-  // 2) Backing list
-  final List<PaymentMethod> _methods = [
-    PaymentMethod(name: 'Visa', details: '**** 4242'),
-    PaymentMethod(name: 'Mastercard', details: '**** 5454'),
-  ];
+  final _auth = FirebaseAuth.instance;
+  final _db = FirebaseFirestore.instance;
 
-  // 3) Read‐only view
-  List<PaymentMethod> get methods => List.unmodifiable(_methods);
+  CollectionReference<Map<String, dynamic>> get _methodsRef {
+    final uid = _auth.currentUser!.uid;
+    return _db.collection('users').doc(uid).collection('payment_methods');
+  }
 
-  // 4) Mutators
-  void addMethod(PaymentMethod m) => _methods.add(m);
-  void deleteMethodAt(int i) => _methods.removeAt(i);
+  /// Fetches all saved payment methods for the current user.
+  Future<List<PaymentMethod>> fetchMethods() async {
+    final snap = await _methodsRef.get();
+    return snap.docs.map((d) => PaymentMethod.fromDoc(d)).toList();
+  }
+
+  /// Adds a new method, storing only the last-4 digits as "**** 1234".
+  Future<void> addMethod(String name, String rawNumber) {
+    final digits = rawNumber.replaceAll(RegExp(r'\D'), '');
+    final suffix =
+        digits.length >= 4 ? digits.substring(digits.length - 4) : digits;
+    final masked = '**** $suffix';
+
+    return _methodsRef.add({'name': name, 'details': masked});
+  }
+
+  /// Deletes the method with the given Firestore document ID.
+  Future<void> deleteMethod(String id) {
+    return _methodsRef.doc(id).delete();
+  }
 }
