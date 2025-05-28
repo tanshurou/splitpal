@@ -61,11 +61,28 @@ class _SignupPageState extends State<SignupPage> {
       );
 
       await cred.user?.updateDisplayName(fullName);
+      final counterRef = FirebaseFirestore.instance.collection('counters').doc('users');
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final counterSnap = await transaction.get(counterRef);
+        int lastId = counterSnap.exists ? (counterSnap.data()?['lastId'] ?? 0) : 0;
+        int newId = lastId + 1;
+        String newUserId = 'U${newId.toString().padLeft(3, '0')}';
 
-      await FirebaseFirestore.instance.collection('users').doc(cred.user!.uid).set({
-        'email': email,
-        'fullName': fullName,
-        'createdAt': FieldValue.serverTimestamp(),
+        // Set the user document
+        transaction.set(
+          FirebaseFirestore.instance.collection('users').doc(newUserId),
+          {
+            'email': email,
+            'fullName': fullName,
+            'createdAt': FieldValue.serverTimestamp(),
+            'currency': "\$",
+            'friends': [],
+            'groups': [],
+          },
+        );
+
+        // Update the counter
+        transaction.set(counterRef, {'lastId': newId});
       });
 
       // ✅ Auto-login and go to HomePage
