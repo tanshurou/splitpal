@@ -28,6 +28,7 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
+  fl_chart: ^0.64.0
   google_fonts: ^5.0.0
   http: ^1.4.0
   flutter_stripe: ^10.0.0
@@ -43,6 +44,7 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   google_nav_bar: ^5.0.7
+  intl: ^0.20.2
 
 dev_dependencies:
   flutter_test:
