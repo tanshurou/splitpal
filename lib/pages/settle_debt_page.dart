@@ -2,13 +2,15 @@
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+
 import '../models/debt.dart';
 import '../services/debt_service.dart';
 import '../models/payment_method.dart';
 import 'payment_page.dart';
 
 class SettleDebtPage extends StatefulWidget {
-  const SettleDebtPage({super.key});
+  const SettleDebtPage({Key? key}) : super(key: key);
+
   @override
   State<SettleDebtPage> createState() => _SettleDebtPageState();
 }
@@ -24,8 +26,13 @@ class _SettleDebtPageState extends State<SettleDebtPage> {
   }
 
   Future<void> _refresh() async {
+    // do the work first
     final next = _service.fetchDebts();
-    setState(() => _debtsFuture = next);
+    // then update state synchronously
+    setState(() {
+      _debtsFuture = next;
+    });
+    // now await so pull-to-refresh spinner works
     await next;
   }
 
@@ -35,7 +42,7 @@ class _SettleDebtPageState extends State<SettleDebtPage> {
       MaterialPageRoute(
         builder:
             (_) => PaymentPage(
-              debt: d, // ← pass the debt here
+              debt: d,
               onSelected: (method) async {
                 await _service.settleDebt(d.id);
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -98,7 +105,7 @@ class _SettleDebtPageState extends State<SettleDebtPage> {
             child: ListView.builder(
               itemCount: debts.length,
               padding: const EdgeInsets.symmetric(vertical: 8),
-              itemBuilder: (_, i) {
+              itemBuilder: (ctx, i) {
                 final d = debts[i];
                 return Card(
                   color: d.iOwe ? Colors.red[50] : Colors.green[50],

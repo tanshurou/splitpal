@@ -1,10 +1,14 @@
+// lib/pages/banking_details_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+
 import '../models/payment_method.dart';
 import '../services/payment_service.dart';
 
 class BankingDetailsPage extends StatefulWidget {
-  const BankingDetailsPage({super.key});
+  const BankingDetailsPage({Key? key}) : super(key: key);
+
   @override
   State<BankingDetailsPage> createState() => _BankingDetailsPageState();
 }
@@ -22,9 +26,15 @@ class _BankingDetailsPageState extends State<BankingDetailsPage> {
     _methodsFuture = PaymentService.instance.fetchMethods();
   }
 
+  Future<void> _deleteMethod(String id) async {
+    await PaymentService.instance.deleteMethod(id);
+    _loadMethods();
+    setState(() {});
+  }
+
   Future<void> _showAddDialog() async {
-    final nameCtrl = TextEditingController();
-    final numberCtrl = TextEditingController();
+    String? name;
+    String? number;
 
     await showDialog<void>(
       context: context,
@@ -35,20 +45,16 @@ class _BankingDetailsPageState extends State<BankingDetailsPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
-                  controller: nameCtrl,
                   decoration: const InputDecoration(
                     labelText: 'Name (e.g. Visa)',
-                    border: OutlineInputBorder(),
                   ),
+                  onChanged: (v) => name = v,
                 ),
                 const SizedBox(height: 8),
                 TextField(
-                  controller: numberCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Card Number',
-                    border: OutlineInputBorder(),
-                  ),
+                  decoration: const InputDecoration(labelText: 'Card Number'),
                   keyboardType: TextInputType.number,
+                  onChanged: (v) => number = v,
                 ),
               ],
             ),
@@ -58,14 +64,15 @@ class _BankingDetailsPageState extends State<BankingDetailsPage> {
                 child: Text('Cancel', style: GoogleFonts.poppins()),
               ),
               ElevatedButton(
-                onPressed: () async {
-                  final name = nameCtrl.text.trim();
-                  final number = numberCtrl.text.trim();
-                  if (name.isNotEmpty && number.isNotEmpty) {
-                    await PaymentService.instance.addMethod(name, number);
-                    _loadMethods();
-                    setState(() {});
-                    Navigator.pop(ctx);
+                onPressed: () {
+                  final n = name?.trim() ?? '';
+                  final num = number?.trim() ?? '';
+                  if (n.isNotEmpty && num.isNotEmpty) {
+                    PaymentService.instance.addMethod(n, num).then((_) {
+                      _loadMethods();
+                      setState(() {});
+                      Navigator.pop(ctx);
+                    });
                   }
                 },
                 child: Text('Add', style: GoogleFonts.poppins()),
@@ -73,12 +80,6 @@ class _BankingDetailsPageState extends State<BankingDetailsPage> {
             ],
           ),
     );
-  }
-
-  Future<void> _deleteMethod(String id) async {
-    await PaymentService.instance.deleteMethod(id);
-    _loadMethods();
-    setState(() {});
   }
 
   @override
@@ -99,6 +100,15 @@ class _BankingDetailsPageState extends State<BankingDetailsPage> {
           if (snap.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
           }
+          if (snap.hasError) {
+            return Center(
+              child: Text(
+                'Error loading payment methods',
+                style: GoogleFonts.poppins(color: Colors.red),
+              ),
+            );
+          }
+
           final methods = snap.data ?? [];
           if (methods.isEmpty) {
             return Center(
@@ -108,6 +118,7 @@ class _BankingDetailsPageState extends State<BankingDetailsPage> {
               ),
             );
           }
+
           return ListView.separated(
             padding: const EdgeInsets.all(16),
             itemCount: methods.length,
@@ -138,9 +149,9 @@ class _BankingDetailsPageState extends State<BankingDetailsPage> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showAddDialog,
+        backgroundColor: gradientEnd,
         icon: const Icon(Icons.add),
         label: Text('Add Method', style: GoogleFonts.poppins()),
-        backgroundColor: gradientEnd,
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );

@@ -1,7 +1,6 @@
-// lib/pages/payment_page.dart
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+
 import '../models/debt.dart';
 import '../models/payment_method.dart';
 import '../services/payment_service.dart';
@@ -9,6 +8,7 @@ import '../services/payment_service.dart';
 class PaymentPage extends StatefulWidget {
   final Debt debt;
   final void Function(PaymentMethod) onSelected;
+
   const PaymentPage({Key? key, required this.debt, required this.onSelected})
     : super(key: key);
 
@@ -82,8 +82,6 @@ class _PaymentPageState extends State<PaymentPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 16),
-
-                // Transfer + amount row
                 Row(
                   children: [
                     const Icon(Icons.swap_horiz, color: Colors.black54),
@@ -110,10 +108,7 @@ class _PaymentPageState extends State<PaymentPage> {
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-
                 const SizedBox(height: 24),
-
-                // Review Transaction box
                 Text(
                   'Review Transaction',
                   style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
@@ -133,23 +128,18 @@ class _PaymentPageState extends State<PaymentPage> {
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 24),
-
-                // Payment Methods label
                 Text(
                   'Payment Methods',
                   style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 8),
-
-                // Methods list
                 Expanded(
                   child: ListView.builder(
                     itemCount: methods.length,
                     itemBuilder: (ctx, i) {
                       final m = methods[i];
-                      final selected = _selectedIndex == i;
+                      final sel = _selectedIndex == i;
                       return GestureDetector(
                         onTap: () => setState(() => _selectedIndex = i),
                         child: Container(
@@ -160,7 +150,7 @@ class _PaymentPageState extends State<PaymentPage> {
                           ),
                           decoration: BoxDecoration(
                             color:
-                                selected
+                                sel
                                     ? gradientEnd.withOpacity(0.2)
                                     : Colors.grey.shade200,
                             borderRadius: BorderRadius.circular(16),
@@ -169,7 +159,7 @@ class _PaymentPageState extends State<PaymentPage> {
                             children: [
                               Icon(
                                 Icons.credit_card,
-                                color: selected ? gradientEnd : Colors.black54,
+                                color: sel ? gradientEnd : Colors.black54,
                               ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -178,7 +168,6 @@ class _PaymentPageState extends State<PaymentPage> {
                                   style: GoogleFonts.poppins(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,
-                                    color: Colors.black87,
                                   ),
                                 ),
                               ),
@@ -197,10 +186,7 @@ class _PaymentPageState extends State<PaymentPage> {
             child: ElevatedButton(
               onPressed:
                   (_selectedIndex != null)
-                      ? () {
-                        final method = methods[_selectedIndex!];
-                        widget.onSelected(method);
-                      }
+                      ? () => widget.onSelected(methods[_selectedIndex!])
                       : null,
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 56),
