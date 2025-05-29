@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:splitpal/pages/home_page.dart';
 import 'package:splitpal/pages/signup_page.dart';
 
@@ -11,7 +12,7 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
   bool _isLoading = false;
@@ -19,18 +20,18 @@ class _LoginPageState extends State<LoginPage> {
   String? _errorMessage;
 
   bool get _canLogin =>
-      _emailController.text.contains('@') &&
+      _usernameController.text.trim().isNotEmpty &&
       _passwordController.text.length >= 6;
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _usernameController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
   Future<void> _onLogin() async {
-    final email = _emailController.text.trim();
+    final username = _usernameController.text.trim();
     final password = _passwordController.text;
 
     setState(() {
@@ -39,28 +40,43 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
+      // Look up email by username
+      final userSnap = await FirebaseFirestore.instance
+          .collection('users')
+          .where('username', isEqualTo: username)
+          .limit(1)
+          .get();
+
+      if (userSnap.docs.isEmpty) {
+        setState(() {
+          _errorMessage = 'No user found for that username.';
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final email = userSnap.docs.first['email'];
+
+      // Proceed with Firebase Auth login
       await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
 
-      // Login success
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const HomePage()),
       );
     } on FirebaseAuthException catch (e) {
-      if (e.code == 'user-not-found') {
-        _errorMessage = 'No user found for that email.';
-      } else if (e.code == 'wrong-password') {
+      if (e.code == 'wrong-password') {
         _errorMessage = 'Incorrect password.';
       } else {
         _errorMessage = 'Login failed. Please try again.';
       }
+    } catch (_) {
+      _errorMessage = 'Login failed. Please try again.';
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
     }
   }
 
@@ -81,12 +97,11 @@ class _LoginPageState extends State<LoginPage> {
               const SizedBox(height: 24),
 
               TextField(
-                controller: _emailController,
+                controller: _usernameController,
                 decoration: const InputDecoration(
-                  labelText: 'Email',
+                  labelText: 'Username',
                   border: OutlineInputBorder(),
                 ),
-                keyboardType: TextInputType.emailAddress,
                 onChanged: (_) => setState(() {}),
               ),
               const SizedBox(height: 16),
