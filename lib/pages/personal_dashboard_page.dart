@@ -75,7 +75,14 @@ class _PersonalDashboardPageState extends State<PersonalDashboardPage> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => AddExpensePage(),
+                                builder:
+                                    (context) => AddExpenseStep1Page(
+                                      userId:
+                                          FirebaseAuth
+                                              .instance
+                                              .currentUser!
+                                              .uid,
+                                    ),
                               ),
                             );
                           }
