@@ -1,5 +1,3 @@
-// lib/pages/personal_dashboard_page.dart
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -57,19 +55,8 @@ class _PersonalDashboardPageState extends State<PersonalDashboardPage> {
           );
         }
 
-        // 2) no data or doc doesn’t exist?
-        if (!snapshot.hasData ||
-            snapshot.data == null ||
-            !snapshot.data!.exists) {
-          return const Scaffold(
-            body: Center(child: Text('User data not found')),
-          );
-        }
-
-        // 3) safe to pull the map
         final raw = snapshot.data!.data();
         final data = (raw as Map<String, dynamic>?) ?? {};
-
         final String username = data['fullName'] as String? ?? 'User';
 
         return Scaffold(
@@ -80,6 +67,7 @@ class _PersonalDashboardPageState extends State<PersonalDashboardPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Welcome Header
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -140,48 +128,118 @@ class _PersonalDashboardPageState extends State<PersonalDashboardPage> {
                   ),
                   const SizedBox(height: 20),
 
-                  UserSummary(userId: userId!),
+                  // Pie Chart Summary with shadow
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    padding: const EdgeInsets.all(12),
+                    child: UserSummary(userId: userId!),
+                  ),
+
                   const SizedBox(height: 24),
 
-                  const Text('Settle debt', style: TextStyle(fontSize: 16)),
-                  const SizedBox(height: 8),
-
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: List.generate(
-                      4,
-                      (index) => const CircleAvatar(radius: 24),
+                  // Owe / Owed Toggle with contrast + animation + shadow
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeInOut,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF5F8), // very light pink
+                      borderRadius: BorderRadius.circular(30),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.08),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    padding: const EdgeInsets.all(4),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => setState(() => showOwe = true),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 250),
+                              curve: Curves.easeInOut,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(20),
+                                gradient:
+                                    showOwe
+                                        ? LinearGradient(
+                                          colors: [
+                                            Colors.pink.shade100,
+                                            Colors.pink.shade50,
+                                          ],
+                                        )
+                                        : null,
+                                color: showOwe ? null : Colors.transparent,
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                'Owe',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color:
+                                      showOwe
+                                          ? Colors.pink[400]
+                                          : Colors.grey[600],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => setState(() => showOwe = false),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 250),
+                              curve: Curves.easeInOut,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(20),
+                                gradient:
+                                    !showOwe
+                                        ? LinearGradient(
+                                          colors: [
+                                            Colors.pink.shade100,
+                                            Colors.pink.shade50,
+                                          ],
+                                        )
+                                        : null,
+                                color: !showOwe ? null : Colors.transparent,
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                'Owed',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color:
+                                      !showOwe
+                                          ? Colors.pink[400]
+                                          : Colors.grey[600],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
 
                   const SizedBox(height: 16),
 
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      ElevatedButton(
-                        onPressed: () => setState(() => showOwe = true),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor:
-                              showOwe ? Colors.pink[100] : Colors.grey[300],
-                        ),
-                        child: const Text('Owe'),
-                      ),
-                      const SizedBox(width: 12),
-                      OutlinedButton(
-                        onPressed: () => setState(() => showOwe = false),
-                        style: OutlinedButton.styleFrom(
-                          backgroundColor:
-                              !showOwe ? Colors.pink[100] : Colors.white,
-                        ),
-                        child: const Text('Owed'),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // List of filtered activities
+                  // Activity list
                   Expanded(
                     child: StreamBuilder<List<Activity>>(
                       stream: userActivityStream(userId!),

@@ -65,8 +65,6 @@ class ActivityTile extends StatelessWidget {
 
         final username = snapshot.data![0];
         final groupName = snapshot.data![1];
-        print("\n\nHERRRRRE");
-        print(groupName);
         final isCurrentUser = activity.userId == currentUserId;
         final currentName = 'You';
 
