@@ -33,101 +33,117 @@ class UserSummary extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Left side (text)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
-                child: Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "RM${balance.toStringAsFixed(0)}",
-                          style: const TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                          ),
+              Expanded(
+                flex: 2,
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "RM${balance.toStringAsFixed(0)}",
+                        style: const TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
                         ),
-                        const Text("balance", style: TextStyle(fontSize: 14)),
-                        const SizedBox(height: 16),
+                      ),
+                      const Text("balance", style: TextStyle(fontSize: 14)),
+                      const SizedBox(height: 16),
 
-                        // Owe label
-                        Row(
-                          children: [
-                            Container(
-                              width: 8,
-                              height: 8,
-                              margin: const EdgeInsets.only(right: 8),
-                              decoration: BoxDecoration(
-                                color: Colors.pink[300],
-                                shape: BoxShape.circle,
-                              ),
+                      // Owe
+                      Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            margin: const EdgeInsets.only(right: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.pink[300],
+                              shape: BoxShape.circle,
                             ),
-                            const Text("Owe", style: TextStyle(fontSize: 14)),
-                          ],
-                        ),
-                        Text(
-                          "RM${owe.toStringAsFixed(0)}",
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
                           ),
+                          const Text("Owe", style: TextStyle(fontSize: 14)),
+                        ],
+                      ),
+                      Text(
+                        "RM${owe.toStringAsFixed(0)}",
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
                         ),
+                      ),
+                      const SizedBox(height: 12),
 
-                        const SizedBox(height: 12),
-
-                        // Owed label
-                        Row(
-                          children: [
-                            Container(
-                              width: 8,
-                              height: 8,
-                              margin: const EdgeInsets.only(right: 8),
-                              decoration: const BoxDecoration(
-                                color: Color.fromARGB(255, 172, 233, 102),
-                                shape: BoxShape.circle,
-                              ),
+                      // Owed
+                      Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            margin: const EdgeInsets.only(right: 8),
+                            decoration: const BoxDecoration(
+                              color: Color.fromARGB(255, 172, 233, 102),
+                              shape: BoxShape.circle,
                             ),
-                            const Text("Owed", style: TextStyle(fontSize: 14)),
-                          ],
-                        ),
-                        Text(
-                          "RM${owed.toStringAsFixed(0)}",
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
                           ),
+                          const Text("Owed", style: TextStyle(fontSize: 14)),
+                        ],
+                      ),
+                      Text(
+                        "RM${owed.toStringAsFixed(0)}",
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ),
 
-              // Right side (thinner pie chart)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(8, 30, 15, 8),
-                child: SizedBox(
-                  width: 140,
-                  height: 140,
-                  child: Center(
+              // Right side (pie chart)
+              Flexible(
+                flex: 1,
+                child: Padding(
+                  padding: const EdgeInsets.only(
+                    top: 30,
+                    left: 4,
+                  ), // moved down and left
+                  child: SizedBox(
+                    width: 100,
+                    height: 100,
                     child: PieChart(
                       PieChartData(
-                        sections: [
-                          PieChartSectionData(
-                            color: Colors.pink[300],
-                            value: owe,
-                            radius: 35, // thinner ring
-                            title: '',
-                          ),
-                          PieChartSectionData(
-                            color: const Color.fromARGB(255, 172, 233, 102),
-                            value: owed,
-                            radius: 35, // thinner ring
-                            title: '',
-                          ),
-                        ],
-                        centerSpaceRadius: 40,
+                        sections:
+                            (owe == 0 && owed == 0)
+                                ? [
+                                  PieChartSectionData(
+                                    color: Colors.purple.shade100,
+                                    value: 1,
+                                    radius: 30,
+                                    title: '',
+                                  ),
+                                ]
+                                : [
+                                  PieChartSectionData(
+                                    color: Colors.pink[300],
+                                    value: owe,
+                                    radius: 30,
+                                    title: '',
+                                  ),
+                                  PieChartSectionData(
+                                    color: const Color.fromARGB(
+                                      255,
+                                      172,
+                                      233,
+                                      102,
+                                    ),
+                                    value: owed,
+                                    radius: 30,
+                                    title: '',
+                                  ),
+                                ],
+                        centerSpaceRadius: 30,
                         sectionsSpace: 4,
                       ),
                     ),
