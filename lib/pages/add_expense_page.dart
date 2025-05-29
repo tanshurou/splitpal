@@ -1,5 +1,5 @@
 import 'dart:io';
-
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
@@ -58,8 +58,8 @@ class _AddExpenseStep1PageState extends State<AddExpenseStep1Page> {
     final expenseId = await getNextExpenseId(_selectedGroupId!);
 
     final newExpenseRef = FirebaseFirestore.instance
-        .collection('groups')
-        .doc(_selectedGroupId)
+        .collection('users')
+        .doc(widget.userId)
         .collection('expenses')
         .doc(expenseId);
 
@@ -83,6 +83,7 @@ class _AddExpenseStep1PageState extends State<AddExpenseStep1Page> {
             (_) => AddExpenseStep2Page(
               groupId: _selectedGroupId!,
               expenseId: expenseId,
+              userId: widget.userId,
             ),
       ),
     );
@@ -189,10 +190,13 @@ class AddExpenseStep2Page extends StatefulWidget {
   final String groupId;
   final String expenseId;
 
+  final String userId;
+
   const AddExpenseStep2Page({
     super.key,
     required this.groupId,
     required this.expenseId,
+    required this.userId,
   });
 
   @override
@@ -233,8 +237,8 @@ class _AddExpenseStep2PageState extends State<AddExpenseStep2Page> {
       final downloadURL = await storageRef.getDownloadURL();
 
       await FirebaseFirestore.instance
-          .collection('groups')
-          .doc(widget.groupId)
+          .collection('users')
+          .doc(widget.userId)
           .collection('expenses')
           .doc(widget.expenseId)
           .update({'receiptURL': downloadURL});
@@ -246,6 +250,7 @@ class _AddExpenseStep2PageState extends State<AddExpenseStep2Page> {
               (_) => AddExpenseStep3Page(
                 groupId: widget.groupId,
                 expenseId: widget.expenseId,
+                userId: widget.userId,
               ),
         ),
       );
@@ -268,6 +273,7 @@ class _AddExpenseStep2PageState extends State<AddExpenseStep2Page> {
             (_) => AddExpenseStep3Page(
               groupId: widget.groupId,
               expenseId: widget.expenseId,
+              userId: widget.userId,
             ),
       ),
     );
@@ -341,21 +347,141 @@ class _AddExpenseStep2PageState extends State<AddExpenseStep2Page> {
   }
 }
 
+class ConfirmExpensePage extends StatelessWidget {
+  final String userId;
+  final String groupId;
+  final String expenseId;
+  final String title;
+  final String? receiptUrl;
+  final double totalAmount;
+  final List<Map<String, dynamic>> selectedMembers;
+  final Map<String, dynamic> paymentStatus;
+  final Map<String, dynamic> approvalStatus;
+  final Map<String, dynamic> userAmounts;
+
+  const ConfirmExpensePage({
+    super.key,
+    required this.userId,
+    required this.groupId,
+    required this.expenseId,
+    required this.title,
+    required this.totalAmount,
+    required this.selectedMembers,
+    required this.paymentStatus,
+    required this.approvalStatus,
+    required this.userAmounts,
+    required this.receiptUrl,
+  });
+
+  Future<void> _submitFinalData(BuildContext context) async {
+    final activityId = 'A${DateTime.now().millisecondsSinceEpoch}';
+
+    await FirebaseFirestore.instance
+        .collection('groups')
+        .doc(groupId)
+        .collection('activityLog')
+        .doc(activityId)
+        .set({
+          'type': 'bill_split_request',
+          'expenseId': expenseId,
+          'title': title,
+          'createdBy': userId,
+          'timestamp': Timestamp.now(),
+          'amount': totalAmount,
+          'splitAmong': selectedMembers.map((e) => e['uid']).toList(),
+          'approvalStatus': approvalStatus,
+        });
+
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('expenses')
+        .doc(expenseId)
+        .update({
+          'amount': totalAmount,
+          'splitAmong': selectedMembers.map((e) => e['uid']).toList(),
+          'paymentStatus': paymentStatus,
+          'approvalStatus': approvalStatus,
+          'userAmounts': userAmounts,
+        });
+
+    Navigator.pop(context); // Pops ConfirmExpensePage
+    Navigator.pop(context); // Pops AddExpenseStep3Page
+    Navigator.pop(context); // Pops AddExpenseStep2Page
+    Navigator.pop(context);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Bill split request sent successfully")),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Confirm Expense')),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("Title: $title", style: const TextStyle(fontSize: 16)),
+            const SizedBox(height: 8),
+            Text("Total Amount: RM${totalAmount.toStringAsFixed(2)}"),
+            const SizedBox(height: 8),
+            if (receiptUrl != null && receiptUrl!.isNotEmpty)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("Receipt:"),
+                  const SizedBox(height: 8),
+                  Image.network(receiptUrl!, height: 150),
+                ],
+              ),
+            const SizedBox(height: 16),
+            const Text("Members and Amounts:"),
+            Expanded(
+              child: ListView(
+                children:
+                    selectedMembers.map((member) {
+                      final uid = member['uid'];
+                      final name = member['name'];
+                      final amt =
+                          userAmounts[uid]?.toStringAsFixed(2) ?? '0.00';
+                      return ListTile(
+                        title: Text(name),
+                        trailing: Text("RM$amt"),
+                      );
+                    }).toList(),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => _submitFinalData(context),
+              child: const Text("Confirm & Send"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+enum SplitMethod { equally, percentage, custom }
+
 class AddExpenseStep3Page extends StatefulWidget {
   final String groupId;
   final String expenseId;
+  final String userId;
 
   const AddExpenseStep3Page({
     super.key,
     required this.groupId,
     required this.expenseId,
+    required this.userId,
   });
 
   @override
   State<AddExpenseStep3Page> createState() => _AddExpenseStep3PageState();
 }
-
-enum SplitMethod { equally, percentage, custom }
 
 class _AddExpenseStep3PageState extends State<AddExpenseStep3Page> {
   SplitMethod _splitMethod = SplitMethod.equally;
@@ -376,7 +502,7 @@ class _AddExpenseStep3PageState extends State<AddExpenseStep3Page> {
   Future<void> _loadGroupInfo() async {
     final groupDoc =
         await FirebaseFirestore.instance
-            .collection('groups')
+            .collection('group')
             .doc(widget.groupId)
             .get();
 
@@ -431,7 +557,7 @@ class _AddExpenseStep3PageState extends State<AddExpenseStep3Page> {
     return const SizedBox();
   }
 
-  void _splitAndSave() async {
+  Future<void> _splitAndSave() async {
     if (_amountController.text.isEmpty || _selectedUserIds.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter amount and select members')),
@@ -440,13 +566,13 @@ class _AddExpenseStep3PageState extends State<AddExpenseStep3Page> {
     }
 
     _totalAmount = double.tryParse(_amountController.text) ?? 0.0;
-
     final splitAmong = _selectedUserIds.toList();
     final perPersonAmount = _totalAmount / splitAmong.length;
 
     Map<String, dynamic> paymentStatus = {};
     Map<String, dynamic> approvalStatus = {};
     Map<String, dynamic> userAmounts = {};
+    List<Map<String, dynamic>> selectedMembers = [];
 
     for (var uid in splitAmong) {
       paymentStatus[uid] = 'unpaid';
@@ -479,23 +605,41 @@ class _AddExpenseStep3PageState extends State<AddExpenseStep3Page> {
       userAmounts.addAll(_customAmounts);
     }
 
-    await FirebaseFirestore.instance
-        .collection('groups')
-        .doc(widget.groupId)
-        .collection('expenses')
-        .doc(widget.expenseId)
-        .update({
-          'amount': _totalAmount,
-          'splitAmong': splitAmong,
-          'paymentStatus': paymentStatus,
-          'approvalStatus': approvalStatus,
-          'userAmounts': userAmounts,
-        });
+    for (var member in _members) {
+      if (_selectedUserIds.contains(member['uid'])) {
+        selectedMembers.add(member);
+      }
+    }
 
-    Navigator.popUntil(context, (route) => route.isFirst);
-    ScaffoldMessenger.of(
+    final expenseDoc =
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(widget.userId)
+            .collection('expenses')
+            .doc(widget.expenseId)
+            .get();
+
+    final title = expenseDoc['title'] ?? '';
+    final receiptUrl = expenseDoc['receiptURL'] ?? '';
+
+    Navigator.push(
       context,
-    ).showSnackBar(const SnackBar(content: Text("Expense added successfully")));
+      MaterialPageRoute(
+        builder:
+            (_) => ConfirmExpensePage(
+              userId: widget.userId,
+              groupId: widget.groupId,
+              expenseId: widget.expenseId,
+              title: title,
+              receiptUrl: receiptUrl,
+              totalAmount: _totalAmount,
+              selectedMembers: selectedMembers,
+              paymentStatus: paymentStatus,
+              approvalStatus: approvalStatus,
+              userAmounts: userAmounts,
+            ),
+      ),
+    );
   }
 
   @override
@@ -576,7 +720,7 @@ class _AddExpenseStep3PageState extends State<AddExpenseStep3Page> {
 
                     ElevatedButton(
                       onPressed: _splitAndSave,
-                      child: const Text("Split and Save"),
+                      child: const Text("Split and Review"),
                     ),
                   ],
                 ),
@@ -584,3 +728,5 @@ class _AddExpenseStep3PageState extends State<AddExpenseStep3Page> {
     );
   }
 }
+
+// ConfirmExpensePage was defined earlier and does not change.

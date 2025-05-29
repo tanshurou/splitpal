@@ -69,8 +69,6 @@ class _PersonalDashboardPageState extends State<PersonalDashboardPage> {
         // 3) safe to pull the map
         final raw = snapshot.data!.data();
         final data = (raw as Map<String, dynamic>?) ?? {};
-        // DEBUG: see exactly what’s coming down
-        print('▶ [Dashboard] user data for ${widget.userId}: $data');
 
         final String username = data['fullName'] as String? ?? 'User';
 
