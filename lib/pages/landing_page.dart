@@ -8,14 +8,14 @@ class LandingPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F3FD), // Soft purple like the reference
+      backgroundColor: const Color(0xFFF4F3FD), // Soft purple
       body: Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 32),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Large Logo
+              // Logo
               Image.asset(
                 'assets/images/splitpal_logo.png',
                 width: 220,
@@ -50,13 +50,13 @@ class LandingPage extends StatelessWidget {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
-                    Navigator.push(
+                    Navigator.pushReplacement(
                       context,
                       MaterialPageRoute(builder: (context) => const LoginPage()),
                     );
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF756EF3), // Vibrant purple
+                    backgroundColor: const Color(0xFF756EF3),
                     padding: const EdgeInsets.symmetric(vertical: 18),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),

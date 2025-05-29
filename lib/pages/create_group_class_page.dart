@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 class CreateGroupPage extends StatefulWidget {
@@ -8,106 +10,54 @@ class CreateGroupPage extends StatefulWidget {
 }
 
 class _CreateGroupPageState extends State<CreateGroupPage> {
-  final TextEditingController _groupNameController = TextEditingController();
+  final _nameController = TextEditingController();
+  final List<String> _selectedUserIds = []; // store member UIDs
+  bool _isCreating = false;
 
-  final List<String> _allFriends = [
-    'Alice',
-    'Bob',
-    'Charlie',
-    'Diana',
-    'Ethan',
-    'Fiona',
-  ];
+  Future<void> _createGroup() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null || _nameController.text.isEmpty) return;
 
-  final Set<String> _selectedFriends = {};
+    setState(() => _isCreating = true);
 
-  @override
-  void dispose() {
-    _groupNameController.dispose();
-    super.dispose();
-  }
+    final groupId = await _getNextGroupId();
+    final groupDoc = FirebaseFirestore.instance.collection('group').doc(groupId);
 
-  bool get _canCreate =>
-      _groupNameController.text.trim().isNotEmpty && _selectedFriends.isNotEmpty;
-
-  void _toggleFriendSelection(String friend) {
-    setState(() {
-      if (_selectedFriends.contains(friend)) {
-        _selectedFriends.remove(friend);
-      } else {
-        _selectedFriends.add(friend);
-      }
+    await groupDoc.set({
+      'name': _nameController.text.trim(),
+      'createdBy': currentUser.uid,
+      'date': Timestamp.now(),
+      'members': [currentUser.uid, ..._selectedUserIds],
     });
+
+    setState(() => _isCreating = false);
+    Navigator.pop(context); // Go back to GroupPage
   }
 
-  void _onCreate() {
-    final groupName = _groupNameController.text.trim();
-    final members = _selectedFriends.toList();
-
-    Navigator.of(context).pop({'name': groupName, 'members': members});
+  Future<String> _getNextGroupId() async {
+    final snapshot = await FirebaseFirestore.instance.collection('group').get();
+    final count = snapshot.docs.length;
+    final nextId = count + 1;
+    return 'G${nextId.toString().padLeft(3, '0')}'; // G001, G002, etc.
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Create Group'),
-      ),
+      appBar: AppBar(title: const Text('Create Group')),
       body: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Group Name', style: TextStyle(fontWeight: FontWeight.bold)),
             TextField(
-              controller: _groupNameController,
-              decoration: const InputDecoration(
-                hintText: 'Enter group name',
-              ),
-              onChanged: (_) => setState(() {}),
+              controller: _nameController,
+              decoration: const InputDecoration(labelText: 'Group Name'),
             ),
-            const SizedBox(height: 24),
-            const Text('Add Members', style: TextStyle(fontWeight: FontWeight.bold)),
-            Expanded(
-              child: ListView.builder(
-                itemCount: _allFriends.length,
-                itemBuilder: (context, index) {
-                  final friend = _allFriends[index];
-                  final selected = _selectedFriends.contains(friend);
-                  return ListTile(
-                    title: Text(friend),
-                    trailing: selected ? const Icon(Icons.check_circle, color: Colors.green) : null,
-                    onTap: () => _toggleFriendSelection(friend),
-                  );
-                },
-              ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _isCreating ? null : _createGroup,
+              child: _isCreating ? const CircularProgressIndicator() : const Text('Create'),
             ),
-            if (_selectedFriends.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                children: _selectedFriends
-                    .map((name) => Chip(
-                          label: Text(name),
-                          onDeleted: () => _toggleFriendSelection(name),
-                        ))
-                    .toList(),
-              ),
-            ],
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: _canCreate ? _onCreate : null,
-                  child: const Text('Create'),
-                ),
-              ],
-            )
           ],
         ),
       ),
