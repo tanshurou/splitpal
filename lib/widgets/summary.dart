@@ -15,7 +15,7 @@ class UserSummary extends StatelessWidget {
               .collection('users')
               .doc(userId)
               .collection('userSummary')
-              .doc('S001')
+              .doc('userSummary')
               .snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {

@@ -1,6 +1,23 @@
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+
+// Shared method to generate the next expense ID
+Future<String> getNextExpenseId(String groupId) async {
+  final snapshot =
+      await FirebaseFirestore.instance
+          .collection('groups')
+          .doc(groupId)
+          .collection('expenses')
+          .get();
+
+  final count = snapshot.docs.length + 1;
+  return 'E${count.toString().padLeft(3, '0')}';
+}
 
 class AddExpenseStep1Page extends StatefulWidget {
   final String userId;
@@ -38,8 +55,13 @@ class _AddExpenseStep1PageState extends State<AddExpenseStep1Page> {
       return;
     }
 
-    final newExpenseRef =
-        FirebaseFirestore.instance.collection('expenses').doc();
+    final expenseId = await getNextExpenseId(_selectedGroupId!);
+
+    final newExpenseRef = FirebaseFirestore.instance
+        .collection('groups')
+        .doc(_selectedGroupId)
+        .collection('expenses')
+        .doc(expenseId);
 
     await newExpenseRef.set({
       'title': _titleController.text.trim(),
@@ -48,17 +70,20 @@ class _AddExpenseStep1PageState extends State<AddExpenseStep1Page> {
       'paidBy': widget.userId,
       'groupId': _selectedGroupId,
       'receiptURL': '',
-      'amount': 0, // to be added in later step
+      'amount': 0,
       'splitAmong': [],
       'approvalStatus': {},
       'paymentStatus': {},
     });
 
-    // Navigate to next step (replace with your actual page)
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => AddExpenseStep2Page(expenseId: newExpenseRef.id),
+        builder:
+            (_) => AddExpenseStep2Page(
+              groupId: _selectedGroupId!,
+              expenseId: expenseId,
+            ),
       ),
     );
   }
@@ -112,7 +137,10 @@ class _AddExpenseStep1PageState extends State<AddExpenseStep1Page> {
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
                 stream:
-                    FirebaseFirestore.instance.collection('group').snapshots(),
+                    FirebaseFirestore.instance
+                        .collection('group')
+                        .where('members', arrayContains: widget.userId)
+                        .snapshots(),
                 builder: (context, snapshot) {
                   if (!snapshot.hasData) {
                     return const Center(child: CircularProgressIndicator());
@@ -129,7 +157,7 @@ class _AddExpenseStep1PageState extends State<AddExpenseStep1Page> {
 
                       return ListTile(
                         title: Text(groupName),
-                        leading: Icon(Icons.group),
+                        leading: const Icon(Icons.group),
                         selected: _selectedGroupId == groupId,
                         onTap: () {
                           setState(() {
@@ -157,14 +185,402 @@ class _AddExpenseStep1PageState extends State<AddExpenseStep1Page> {
   }
 }
 
-// Dummy placeholder for next page
-class AddExpenseStep2Page extends StatelessWidget {
+class AddExpenseStep2Page extends StatefulWidget {
+  final String groupId;
   final String expenseId;
 
-  const AddExpenseStep2Page({super.key, required this.expenseId});
+  const AddExpenseStep2Page({
+    super.key,
+    required this.groupId,
+    required this.expenseId,
+  });
+
+  @override
+  State<AddExpenseStep2Page> createState() => _AddExpenseStep2PageState();
+}
+
+class _AddExpenseStep2PageState extends State<AddExpenseStep2Page> {
+  File? _imageFile;
+  bool _isUploading = false;
+
+  final ImagePicker _picker = ImagePicker();
+
+  Future<void> _takePhoto() async {
+    final XFile? pickedFile = await _picker.pickImage(
+      source: ImageSource.camera,
+    );
+
+    if (pickedFile != null) {
+      setState(() {
+        _imageFile = File(pickedFile.path);
+      });
+    }
+  }
+
+  Future<void> _uploadAndContinue() async {
+    if (_imageFile == null) return;
+
+    setState(() {
+      _isUploading = true;
+    });
+
+    try {
+      final storageRef = FirebaseStorage.instance.ref().child(
+        'receipts/${widget.expenseId}.jpg',
+      );
+
+      await storageRef.putFile(_imageFile!);
+      final downloadURL = await storageRef.getDownloadURL();
+
+      await FirebaseFirestore.instance
+          .collection('groups')
+          .doc(widget.groupId)
+          .collection('expenses')
+          .doc(widget.expenseId)
+          .update({'receiptURL': downloadURL});
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder:
+              (_) => AddExpenseStep3Page(
+                groupId: widget.groupId,
+                expenseId: widget.expenseId,
+              ),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Upload failed: $e')));
+    } finally {
+      setState(() {
+        _isUploading = false;
+      });
+    }
+  }
+
+  void _skipStep() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder:
+            (_) => AddExpenseStep3Page(
+              groupId: widget.groupId,
+              expenseId: widget.expenseId,
+            ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(body: Center(child: Text("Step 2 for $expenseId")));
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Add an Expense"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+          ),
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            const Text(
+              "Scan Receipt",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 20),
+
+            GestureDetector(
+              onTap: _takePhoto,
+              child: Container(
+                height: 300,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  color: Colors.grey.shade100,
+                ),
+                child:
+                    _imageFile != null
+                        ? Image.file(_imageFile!, fit: BoxFit.cover)
+                        : const Icon(
+                          Icons.camera_alt,
+                          size: 80,
+                          color: Colors.grey,
+                        ),
+              ),
+            ),
+
+            const SizedBox(height: 30),
+
+            if (_isUploading)
+              const CircularProgressIndicator()
+            else
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton.icon(
+                    onPressed: _skipStep,
+                    icon: const Icon(Icons.double_arrow),
+                    label: const Text("Skip"),
+                  ),
+                  ElevatedButton(
+                    onPressed: _imageFile != null ? _uploadAndContinue : null,
+                    child: const Text("Continue"),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class AddExpenseStep3Page extends StatefulWidget {
+  final String groupId;
+  final String expenseId;
+
+  const AddExpenseStep3Page({
+    super.key,
+    required this.groupId,
+    required this.expenseId,
+  });
+
+  @override
+  State<AddExpenseStep3Page> createState() => _AddExpenseStep3PageState();
+}
+
+enum SplitMethod { equally, percentage, custom }
+
+class _AddExpenseStep3PageState extends State<AddExpenseStep3Page> {
+  SplitMethod _splitMethod = SplitMethod.equally;
+  double _totalAmount = 0.0;
+  final TextEditingController _amountController = TextEditingController();
+  List<Map<String, dynamic>> _members = [];
+  Set<String> _selectedUserIds = {};
+
+  final Map<String, double> _customAmounts = {};
+  final Map<String, double> _percentages = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadGroupInfo();
+  }
+
+  Future<void> _loadGroupInfo() async {
+    final groupDoc =
+        await FirebaseFirestore.instance
+            .collection('groups')
+            .doc(widget.groupId)
+            .get();
+
+    if (!groupDoc.exists || groupDoc.data() == null) return;
+
+    final memberIds = List<String>.from(groupDoc.data()!['members'] ?? []);
+    final usersCollection = FirebaseFirestore.instance.collection('users');
+
+    final members = await Future.wait(
+      memberIds.map((uid) async {
+        final userDoc = await usersCollection.doc(uid).get();
+        return {'uid': uid, 'name': userDoc['fullName'] ?? 'User'};
+      }),
+    );
+
+    setState(() {
+      _members = members;
+      _selectedUserIds = memberIds.toSet();
+    });
+  }
+
+  Widget _buildSplitInput(String uid) {
+    if (_splitMethod == SplitMethod.percentage) {
+      return SizedBox(
+        width: 60,
+        child: TextFormField(
+          initialValue: _percentages[uid]?.toString() ?? '',
+          keyboardType: TextInputType.number,
+          onChanged: (val) {
+            setState(() {
+              _percentages[uid] = double.tryParse(val) ?? 0.0;
+            });
+          },
+          decoration: const InputDecoration(suffixText: "%"),
+        ),
+      );
+    } else if (_splitMethod == SplitMethod.custom) {
+      return SizedBox(
+        width: 80,
+        child: TextFormField(
+          initialValue: _customAmounts[uid]?.toString() ?? '',
+          keyboardType: TextInputType.number,
+          onChanged: (val) {
+            setState(() {
+              _customAmounts[uid] = double.tryParse(val) ?? 0.0;
+            });
+          },
+          decoration: const InputDecoration(prefixText: "RM"),
+        ),
+      );
+    }
+    return const SizedBox();
+  }
+
+  void _splitAndSave() async {
+    if (_amountController.text.isEmpty || _selectedUserIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter amount and select members')),
+      );
+      return;
+    }
+
+    _totalAmount = double.tryParse(_amountController.text) ?? 0.0;
+
+    final splitAmong = _selectedUserIds.toList();
+    final perPersonAmount = _totalAmount / splitAmong.length;
+
+    Map<String, dynamic> paymentStatus = {};
+    Map<String, dynamic> approvalStatus = {};
+    Map<String, dynamic> userAmounts = {};
+
+    for (var uid in splitAmong) {
+      paymentStatus[uid] = 'unpaid';
+      approvalStatus[uid] = 'pending';
+    }
+
+    if (_splitMethod == SplitMethod.equally) {
+      for (var uid in splitAmong) {
+        userAmounts[uid] = perPersonAmount;
+      }
+    } else if (_splitMethod == SplitMethod.percentage) {
+      double totalPercent = _percentages.values.fold(0, (a, b) => a + b);
+      if (totalPercent != 100) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Percentages must total 100%')),
+        );
+        return;
+      }
+      for (var uid in splitAmong) {
+        userAmounts[uid] = (_percentages[uid] ?? 0) * _totalAmount / 100;
+      }
+    } else {
+      double totalCustom = _customAmounts.values.fold(0, (a, b) => a + b);
+      if ((totalCustom - _totalAmount).abs() > 0.01) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Custom amounts must total RM$_totalAmount')),
+        );
+        return;
+      }
+      userAmounts.addAll(_customAmounts);
+    }
+
+    await FirebaseFirestore.instance
+        .collection('groups')
+        .doc(widget.groupId)
+        .collection('expenses')
+        .doc(widget.expenseId)
+        .update({
+          'amount': _totalAmount,
+          'splitAmong': splitAmong,
+          'paymentStatus': paymentStatus,
+          'approvalStatus': approvalStatus,
+          'userAmounts': userAmounts,
+        });
+
+    Navigator.popUntil(context, (route) => route.isFirst);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text("Expense added successfully")));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Split Bill')),
+      body:
+          _members.isEmpty
+              ? const Center(child: CircularProgressIndicator())
+              : Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("Total Amount (RM)"),
+                    TextField(
+                      controller: _amountController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(hintText: "e.g. 100.0"),
+                    ),
+                    const SizedBox(height: 16),
+
+                    ToggleButtons(
+                      isSelected: [
+                        _splitMethod == SplitMethod.equally,
+                        _splitMethod == SplitMethod.percentage,
+                        _splitMethod == SplitMethod.custom,
+                      ],
+                      onPressed: (index) {
+                        setState(() {
+                          _splitMethod = SplitMethod.values[index];
+                        });
+                      },
+                      children: const [
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 12),
+                          child: Text("Equally"),
+                        ),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 12),
+                          child: Text("Percentage"),
+                        ),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 12),
+                          child: Text("Custom"),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: _members.length,
+                        itemBuilder: (context, index) {
+                          final member = _members[index];
+                          final uid = member['uid'];
+                          final name = member['name'];
+
+                          return CheckboxListTile(
+                            value: _selectedUserIds.contains(uid),
+                            onChanged: (val) {
+                              setState(() {
+                                if (val == true) {
+                                  _selectedUserIds.add(uid);
+                                } else {
+                                  _selectedUserIds.remove(uid);
+                                }
+                              });
+                            },
+                            title: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [Text(name), _buildSplitInput(uid)],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+
+                    ElevatedButton(
+                      onPressed: _splitAndSave,
+                      child: const Text("Split and Save"),
+                    ),
+                  ],
+                ),
+              ),
+    );
   }
 }

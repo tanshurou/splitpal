@@ -9,31 +9,53 @@ class ActivityTile extends StatelessWidget {
 
   const ActivityTile({super.key, required this.activity});
 
+  /// Fetch full name based on userId from Firestore
   Future<String> fetchUserName(String userId) async {
     final userDoc =
         await FirebaseFirestore.instance.collection('users').doc(userId).get();
     return userDoc.data()?['fullName'] ?? userId;
   }
 
+  /// Fetch group name based on groupId from Firestore
   Future<String> fetchGroupName(String groupId) async {
     final groupDoc =
-        await FirebaseFirestore.instance
-            .collection('groups')
-            .doc(groupId)
-            .get();
-    return groupDoc.data()?['groupName'] ?? groupId;
+        await FirebaseFirestore.instance.collection('group').doc(groupId).get();
+    return groupDoc.data()?['name'] ?? groupId;
+  }
+
+  /// Build activity description string based on category
+  String buildDescription({
+    required String action,
+    required String category,
+    required String name,
+    required String currentUser,
+    required double amount,
+    required String groupName,
+  }) {
+    final rm = 'RM${amount.toStringAsFixed(2)}';
+    if (category == 'owe') {
+      return action == 'paid'
+          ? '$currentUser paid $name $rm in $groupName'
+          : '$currentUser owe $name $rm in $groupName';
+    } else if (category == 'owed') {
+      return action == 'paid'
+          ? '$name paid you $rm in $groupName'
+          : '$name owe you $rm in $groupName';
+    } else {
+      return '$name $action $rm in $groupName';
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final currentUserId = FirebaseAuth.instance.currentUser!.uid;
 
-    return FutureBuilder(
+    return FutureBuilder<List<String>>(
       future: Future.wait([
         fetchUserName(activity.userId),
         fetchGroupName(activity.group),
       ]),
-      builder: (context, AsyncSnapshot<List<String>> snapshot) {
+      builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const ListTile(
             leading: CircleAvatar(),
@@ -43,10 +65,12 @@ class ActivityTile extends StatelessWidget {
 
         final username = snapshot.data![0];
         final groupName = snapshot.data![1];
+        print("\n\nHERRRRRE");
+        print(groupName);
         final isCurrentUser = activity.userId == currentUserId;
-        final name = isCurrentUser ? 'You' : username;
+        final currentName = 'You';
 
-        // Icon and color based on action
+        // Set icon and color
         IconData icon;
         Color color;
         switch (activity.action) {
@@ -63,20 +87,14 @@ class ActivityTile extends StatelessWidget {
             color = Colors.grey;
         }
 
-        String description;
-        switch (activity.action) {
-          case 'owes':
-            description =
-                '$name owe RM${activity.amount.toStringAsFixed(2)} in $groupName';
-            break;
-          case 'paid':
-            description =
-                '$name paid RM${activity.amount.toStringAsFixed(2)} in $groupName';
-            break;
-          default:
-            description =
-                '$name ${activity.action} RM${activity.amount.toStringAsFixed(2)} in $groupName';
-        }
+        final description = buildDescription(
+          action: activity.action,
+          category: activity.category,
+          name: username,
+          currentUser: currentName,
+          amount: activity.amount,
+          groupName: groupName,
+        );
 
         return ListTile(
           leading: CircleAvatar(

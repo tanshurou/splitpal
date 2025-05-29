@@ -1,19 +1,16 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:splitpal/services/getUserID.dart';
 import 'package:splitpal/widgets/summary.dart';
 import 'package:splitpal/widgets/activity_tile.dart';
 import 'package:splitpal/models/activity.dart';
 import 'package:splitpal/services/activity_service.dart';
-
-// Replace with your actual imports
 import 'package:splitpal/pages/settle_debt_page.dart';
 import 'package:splitpal/pages/add_expense_page.dart';
 
 class PersonalDashboardPage extends StatefulWidget {
-  final String userId;
-
-  const PersonalDashboardPage({super.key, required this.userId});
+  const PersonalDashboardPage({super.key});
 
   @override
   State<PersonalDashboardPage> createState() => _PersonalDashboardPageState();
@@ -21,17 +18,38 @@ class PersonalDashboardPage extends StatefulWidget {
 
 class _PersonalDashboardPageState extends State<PersonalDashboardPage> {
   bool showOwe = true;
+  String? userId;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveUserId();
+  }
+
+  Future<void> _resolveUserId() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final resolvedId = await getUserIdByEmail(user.email!);
+      if (mounted) {
+        setState(() => userId = resolvedId);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (userId == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
     return StreamBuilder<DocumentSnapshot>(
       stream:
           FirebaseFirestore.instance
               .collection('users')
-              .doc(widget.userId)
+              .doc(userId)
               .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) {
+        if (!snapshot.hasData || !snapshot.data!.exists) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
@@ -48,7 +66,6 @@ class _PersonalDashboardPageState extends State<PersonalDashboardPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Header Row
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -76,13 +93,8 @@ class _PersonalDashboardPageState extends State<PersonalDashboardPage> {
                               context,
                               MaterialPageRoute(
                                 builder:
-                                    (context) => AddExpenseStep1Page(
-                                      userId:
-                                          FirebaseAuth
-                                              .instance
-                                              .currentUser!
-                                              .uid,
-                                    ),
+                                    (context) =>
+                                        AddExpenseStep1Page(userId: userId!),
                               ),
                             );
                           }
@@ -114,14 +126,12 @@ class _PersonalDashboardPageState extends State<PersonalDashboardPage> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Balance Summary Card
-                  UserSummary(userId: widget.userId),
+                  UserSummary(userId: userId!),
                   const SizedBox(height: 24),
 
                   const Text('Settle debt', style: TextStyle(fontSize: 16)),
                   const SizedBox(height: 8),
 
-                  // Face icons (placeholder)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: List.generate(
@@ -132,7 +142,6 @@ class _PersonalDashboardPageState extends State<PersonalDashboardPage> {
 
                   const SizedBox(height: 16),
 
-                  // Owe / Owed Toggle
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -158,10 +167,9 @@ class _PersonalDashboardPageState extends State<PersonalDashboardPage> {
 
                   const SizedBox(height: 16),
 
-                  // List of filtered debts
                   Expanded(
                     child: StreamBuilder<List<Activity>>(
-                      stream: userActivityStream(widget.userId),
+                      stream: userActivityStream(userId!),
                       builder: (context, snapshot) {
                         if (!snapshot.hasData) {
                           return const Center(
@@ -179,11 +187,17 @@ class _PersonalDashboardPageState extends State<PersonalDashboardPage> {
                                 )
                                 .toList();
 
+                        if (filtered.isEmpty) {
+                          return const Center(
+                            child: Text('No activities to show'),
+                          );
+                        }
+
                         return ListView.builder(
                           itemCount: filtered.length,
-                          itemBuilder: (context, index) {
-                            return ActivityTile(activity: filtered[index]);
-                          },
+                          itemBuilder:
+                              (context, index) =>
+                                  ActivityTile(activity: filtered[index]),
                         );
                       },
                     ),

@@ -6,7 +6,8 @@ import 'package:splitpal/services/activity_service.dart';
 import 'package:splitpal/widgets/activity_tile.dart';
 
 class HistoryPage extends StatefulWidget {
-  const HistoryPage({super.key});
+  const HistoryPage({super.key, required this.userId});
+  final String userId;
 
   @override
   State<HistoryPage> createState() => _HistoryPageState();

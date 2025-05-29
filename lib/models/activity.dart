@@ -19,27 +19,25 @@ class Activity {
 
   /// Factory constructor to build an Activity from Firestore DocumentSnapshot
   factory Activity.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+    final data = doc.data() as Map<String, dynamic>?;
+
+    if (data == null ||
+        !data.containsKey('action') ||
+        !data.containsKey('amount') ||
+        !data.containsKey('category') ||
+        !data.containsKey('date') ||
+        !data.containsKey('group') ||
+        !data.containsKey('userID')) {
+      throw FormatException('Missing fields in activity document');
+    }
+
     return Activity(
       action: data['action'] ?? '',
       amount: (data['amount'] ?? 0).toDouble(),
       category: data['category'] ?? '',
       date: (data['date'] as Timestamp).toDate(),
       group: data['group'] ?? '',
-      userId: data['userID']?.toString().trim() ?? '',
+      userId: data['userID'].toString().trim(),
     );
-  }
-
-  /// Basic string description. You can use this if you don't want to fetch user/group names.
-  String buildDescription(String currentUserId) {
-    final name = userId == currentUserId ? 'You' : userId;
-    switch (action) {
-      case 'owes':
-        return '$name owe RM${amount.toStringAsFixed(2)} in $group';
-      case 'paid':
-        return '$name paid RM${amount.toStringAsFixed(2)} in $group';
-      default:
-        return '$name $action RM${amount.toStringAsFixed(2)} in $group';
-    }
   }
 }
