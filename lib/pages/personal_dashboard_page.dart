@@ -1,3 +1,5 @@
+// lib/pages/personal_dashboard_page.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -55,8 +57,22 @@ class _PersonalDashboardPageState extends State<PersonalDashboardPage> {
           );
         }
 
-        final data = snapshot.data!.data() as Map<String, dynamic>;
-        final String username = data['fullName'] ?? 'User';
+        // 2) no data or doc doesn’t exist?
+        if (!snapshot.hasData ||
+            snapshot.data == null ||
+            !snapshot.data!.exists) {
+          return const Scaffold(
+            body: Center(child: Text('User data not found')),
+          );
+        }
+
+        // 3) safe to pull the map
+        final raw = snapshot.data!.data();
+        final data = (raw as Map<String, dynamic>?) ?? {};
+        // DEBUG: see exactly what’s coming down
+        print('▶ [Dashboard] user data for ${widget.userId}: $data');
+
+        final String username = data['fullName'] as String? ?? 'User';
 
         return Scaffold(
           backgroundColor: Colors.white,
@@ -85,7 +101,7 @@ class _PersonalDashboardPageState extends State<PersonalDashboardPage> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => SettleDebtPage(),
+                                builder: (context) => const SettleDebtPage(),
                               ),
                             );
                           } else {
@@ -167,6 +183,7 @@ class _PersonalDashboardPageState extends State<PersonalDashboardPage> {
 
                   const SizedBox(height: 16),
 
+                  // List of filtered activities
                   Expanded(
                     child: StreamBuilder<List<Activity>>(
                       stream: userActivityStream(userId!),
