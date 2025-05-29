@@ -4,7 +4,6 @@ import '../services/currency_service.dart';
 
 class CurrencySettingsPage extends StatefulWidget {
   const CurrencySettingsPage({Key? key}) : super(key: key);
-
   @override
   State<CurrencySettingsPage> createState() => _CurrencySettingsPageState();
 }
@@ -16,10 +15,9 @@ class _CurrencySettingsPageState extends State<CurrencySettingsPage> {
   @override
   void initState() {
     super.initState();
-    // 1) initialize with the default or previously loaded value
+    // start with whatever's in memory
     _selected = svc.current;
-
-    // 2) pull the last‐saved choice from Firestore
+    // then load from Firestore and refresh
     svc.loadCurrency().then((_) {
       setState(() {
         _selected = svc.current;
@@ -31,62 +29,25 @@ class _CurrencySettingsPageState extends State<CurrencySettingsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Choose Currency', style: GoogleFonts.inter()),
+        title: Text('Choose Currency', style: GoogleFonts.poppins()),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            DropdownButton<String>(
-              isExpanded: true,
-              value: _selected,
-              items:
-                  svc.supported.map((code) {
-                    return DropdownMenuItem(
-                      value: code,
-                      child: Text(
-                        '${_symbolFor(code)}  $code',
-                        style: GoogleFonts.inter(fontSize: 16),
-                      ),
-                    );
-                  }).toList(),
-              onChanged: (newCode) async {
-                if (newCode == null) return;
-                // update locally + Firestore
-                await svc.updateCurrency(newCode);
-                setState(() {
-                  _selected = newCode;
-                });
+      body: ListView(
+        children: [
+          const SizedBox(height: 16),
+          ...CurrencyService.supported.map((code) {
+            return RadioListTile<String>(
+              value: code,
+              groupValue: _selected,
+              title: Text(code, style: GoogleFonts.poppins(fontSize: 18)),
+              onChanged: (val) {
+                if (val == null) return;
+                setState(() => _selected = val);
+                svc.updateCurrency(val);
               },
-            ),
-
-            const SizedBox(height: 24),
-            Text(
-              'Preview: ${_symbolFor(_selected)} 1234.56',
-              style: GoogleFonts.inter(fontSize: 18),
-            ),
-          ],
-        ),
+            );
+          }).toList(),
+        ],
       ),
     );
-  }
-
-  String _symbolFor(String code) {
-    switch (code) {
-      case 'USD':
-        return r'$';
-      case 'EUR':
-        return '€';
-      case 'GBP':
-        return '£';
-      case 'JPY':
-        return '¥';
-      case 'AUD':
-        return 'A\$';
-      case 'RM':
-        return 'RM';
-      default:
-        return code;
-    }
   }
 }

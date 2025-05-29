@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../models/debt.dart';
 import '../services/debt_service.dart';
+import '../services/currency_service.dart';
 import 'payment_page.dart';
 
 class SettleDebtPage extends StatefulWidget {
@@ -15,22 +16,22 @@ class SettleDebtPage extends StatefulWidget {
 
 class _SettleDebtPageState extends State<SettleDebtPage> {
   final _service = DebtService();
+  final _currencySvc = CurrencyService.instance;
   late Future<List<Debt>> _debtsFuture;
 
   @override
   void initState() {
     super.initState();
+    // load user’s currency preference first
+    _currencySvc.loadCurrency().then((_) {
+      setState(() {}); // force a rebuild to pick up new symbol/rate
+    });
     _debtsFuture = _service.fetchDebts();
   }
 
   Future<void> _refresh() async {
-    // kick off the fetch
     final next = _service.fetchDebts();
-    // synchronously update our state
-    setState(() {
-      _debtsFuture = next;
-    });
-    // now await the result
+    setState(() => _debtsFuture = next);
     await next;
   }
 
@@ -68,26 +69,16 @@ class _SettleDebtPageState extends State<SettleDebtPage> {
       ),
       body: FutureBuilder<List<Debt>>(
         future: _debtsFuture,
-        builder: (ctx, snap) {
-          // Debug output
-          print(
-            '▶ [SettleDebtPage] '
-            'state=${snap.connectionState}, '
-            'hasError=${snap.hasError}, '
-            'dataCount=${snap.data?.length ?? 0}',
-          );
-
+        builder: (ctx, snapshot) {
           // Loading
-          if (snap.connectionState != ConnectionState.done) {
+          if (snapshot.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
           }
           // Error
-          if (snap.hasError) {
-            return Center(child: Text('Error: ${snap.error}'));
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
           }
-
-          final debts = snap.data ?? [];
-
+          final debts = snapshot.data ?? [];
           // Empty
           if (debts.isEmpty) {
             return RefreshIndicator(
@@ -105,8 +96,7 @@ class _SettleDebtPageState extends State<SettleDebtPage> {
               ),
             );
           }
-
-          // Display list
+          // List
           return RefreshIndicator(
             onRefresh: _refresh,
             child: ListView.builder(
@@ -126,7 +116,8 @@ class _SettleDebtPageState extends State<SettleDebtPage> {
                       style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
                     ),
                     subtitle: Text(
-                      '${d.iOwe ? '-' : ''}\$${d.amount.toStringAsFixed(2)}',
+                      // ← show converted amount
+                      _currencySvc.symbolFor(d.amount),
                       style: GoogleFonts.poppins(),
                     ),
                     trailing: ElevatedButton(

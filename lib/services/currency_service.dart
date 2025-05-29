@@ -2,38 +2,80 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class CurrencyService {
-  CurrencyService._();
-  static final CurrencyService instance = CurrencyService._();
+  // Singleton
+  static final CurrencyService instance = CurrencyService._internal();
+  CurrencyService._internal();
+  factory CurrencyService() => instance;
 
-  // List of supported currency codes
-  final List<String> supported = ['USD', 'EUR', 'GBP', 'JPY', 'AUD', 'RM'];
+  /// Supported currencies & their USD exchange rates
+  static const supported = ['\$', '€', 'RM'];
+  static const Map<String, double> _rates = {
+    '\$': 1.0, // USD base
+    '€': 0.92, // 1 USD = 0.92 EUR
+    'RM': 4.50, // 1 USD = 4.50 MYR
+  };
 
-  // Currently selected currency (defaults to USD)
-  String _current = 'USD';
+  String _current = supported.first;
   String get current => _current;
+  double get rate => _rates[_current] ?? 1.0;
+  String symbolFor(double usdAmount) {
+    final converted = usdAmount * rate;
+    return '$current${converted.toStringAsFixed(2)}';
+  }
 
-  /// Load the saved currency from Firestore (if any).
+  final _db = FirebaseFirestore.instance;
+  String? _userDocId;
+
+  Future<String> _resolveUserDocId() async {
+    if (_userDocId != null) return _userDocId!;
+    final me = FirebaseAuth.instance.currentUser;
+    if (me == null || me.email == null) throw Exception('Not authenticated');
+
+    final snap =
+        await _db
+            .collection('users')
+            .where('email', isEqualTo: me.email)
+            .limit(1)
+            .get();
+
+    if (snap.docs.isNotEmpty) {
+      _userDocId = snap.docs.first.id;
+    } else {
+      _userDocId = me.uid;
+      await _db.collection('users').doc(_userDocId).set({
+        'email': me.email,
+        'fullName': me.displayName ?? '',
+        'createdAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
+    return _userDocId!;
+  }
+
   Future<void> loadCurrency() async {
-    final uid = FirebaseAuth.instance.currentUser!.uid;
-    final doc =
-        await FirebaseFirestore.instance.collection('users').doc(uid).get();
-    if (doc.exists) {
-      final data = doc.data()!;
-      if (data.containsKey('currency') &&
-          supported.contains(data['currency'])) {
-        _current = data['currency'];
-      }
+    final docId = await _resolveUserDocId();
+    final snap = await _db.collection('users').doc(docId).get();
+    final data = snap.data() ?? {};
+    final c = data['currency'] as String?;
+    if (c != null && supported.contains(c)) {
+      _current = c;
     }
   }
 
-  /// Update the local value *and* write it back to Firestore.
   Future<void> updateCurrency(String newCurrency) async {
     if (!supported.contains(newCurrency)) return;
     _current = newCurrency;
 
-    final uid = FirebaseAuth.instance.currentUser!.uid;
-    await FirebaseFirestore.instance.collection('users').doc(uid).update({
-      'currency': newCurrency,
-    });
+    final docId = await _resolveUserDocId();
+    final ref = _db.collection('users').doc(docId);
+
+    try {
+      await ref.update({'currency': newCurrency});
+    } on FirebaseException catch (e) {
+      if (e.code == 'not-found') {
+        await ref.set({'currency': newCurrency}, SetOptions(merge: true));
+      } else {
+        rethrow;
+      }
+    }
   }
 }
