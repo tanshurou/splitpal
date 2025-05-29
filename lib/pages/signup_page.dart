@@ -12,7 +12,7 @@ class SignupPage extends StatefulWidget {
 }
 
 class _SignupPageState extends State<SignupPage> {
-  final TextEditingController _fullNameController = TextEditingController();
+  final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
@@ -23,16 +23,16 @@ class _SignupPageState extends State<SignupPage> {
   bool _obscureConfirmPassword = true;
 
   bool get _canSignUp {
-    final fullNameValid = _fullNameController.text.trim().isNotEmpty;
+    final usernameValid = _usernameController.text.trim().isNotEmpty;
     final emailValid = _emailController.text.contains('@');
     final passwordValid = _passwordController.text.length >= 6;
     final passwordsMatch = _passwordController.text == _confirmPasswordController.text;
-    return fullNameValid && emailValid && passwordValid && passwordsMatch;
+    return usernameValid && emailValid && passwordValid && passwordsMatch;
   }
 
   @override
   void dispose() {
-    _fullNameController.dispose();
+    _usernameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -40,7 +40,7 @@ class _SignupPageState extends State<SignupPage> {
   }
 
   Future<void> _onSignUp() async {
-    final fullName = _fullNameController.text.trim();
+    final username = _usernameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
@@ -60,7 +60,8 @@ class _SignupPageState extends State<SignupPage> {
         password: password,
       );
 
-      await cred.user?.updateDisplayName(fullName);
+      await cred.user?.updateDisplayName(username);
+
       final counterRef = FirebaseFirestore.instance.collection('counters').doc('users');
       await FirebaseFirestore.instance.runTransaction((transaction) async {
         final counterSnap = await transaction.get(counterRef);
@@ -68,12 +69,12 @@ class _SignupPageState extends State<SignupPage> {
         int newId = lastId + 1;
         String newUserId = 'U${newId.toString().padLeft(3, '0')}';
 
-        // Set the user document
+        // Create user document
         transaction.set(
           FirebaseFirestore.instance.collection('users').doc(newUserId),
           {
             'email': email,
-            'fullName': fullName,
+            'username': username,
             'createdAt': FieldValue.serverTimestamp(),
             'currency': "\$",
             'friends': [],
@@ -81,11 +82,23 @@ class _SignupPageState extends State<SignupPage> {
           },
         );
 
-        // Update the counter
+        // Create userSummary subcollection with owe/owed initialized
+        transaction.set(
+          FirebaseFirestore.instance
+              .collection('users')
+              .doc(newUserId)
+              .collection('userSummary')
+              .doc('userSummary'),
+          {
+            'owe': 0,
+            'owed': 0,
+          },
+        );
+
+        // Update ID counter
         transaction.set(counterRef, {'lastId': newId});
       });
 
-      // ✅ Auto-login and go to HomePage
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const HomePage()),
@@ -122,9 +135,9 @@ class _SignupPageState extends State<SignupPage> {
               ),
               const SizedBox(height: 24),
               TextField(
-                controller: _fullNameController,
+                controller: _usernameController,
                 decoration: const InputDecoration(
-                  labelText: 'Full Name',
+                  labelText: 'Username',
                   border: OutlineInputBorder(),
                 ),
                 onChanged: (_) => setState(() {}),
