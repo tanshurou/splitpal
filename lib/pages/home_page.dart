@@ -4,8 +4,6 @@ import 'package:splitpal/widgets/bottom_nav_bar.dart';
 import 'package:splitpal/pages/group_page.dart';
 import 'package:splitpal/pages/activity_page.dart';
 import 'package:splitpal/pages/personal_dashboard_page.dart';
-import 'package:splitpal/pages/settings_page.dart';
-import 'package:splitpal/pages/settle_debt_page.dart';
 import 'package:splitpal/pages/profile_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -22,8 +20,6 @@ class _HomePageState extends State<HomePage> {
     PersonalDashboardPage(userId: FirebaseAuth.instance.currentUser!.uid),
     GroupPage(),
     HistoryPage(),
-    SettingsPage(),
-    SettleDebtPage(),
     const ProfilePage(),
   ];
 
