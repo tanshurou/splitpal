@@ -7,7 +7,9 @@ import '../services/payment_service.dart';
 
 class PaymentPage extends StatefulWidget {
   final Debt debt;
-  final void Function(PaymentMethod) onSelected;
+
+  /// Now expects a Future-returning callback so we can await it
+  final Future<void> Function(PaymentMethod) onSelected;
 
   const PaymentPage({Key? key, required this.debt, required this.onSelected})
     : super(key: key);
@@ -19,6 +21,7 @@ class PaymentPage extends StatefulWidget {
 class _PaymentPageState extends State<PaymentPage> {
   late Future<List<PaymentMethod>> _methodsFuture;
   int? _selectedIndex;
+  bool _isProcessing = false;
 
   @override
   void initState() {
@@ -141,7 +144,10 @@ class _PaymentPageState extends State<PaymentPage> {
                       final m = methods[i];
                       final sel = _selectedIndex == i;
                       return GestureDetector(
-                        onTap: () => setState(() => _selectedIndex = i),
+                        onTap:
+                            _isProcessing
+                                ? null
+                                : () => setState(() => _selectedIndex = i),
                         child: Container(
                           margin: const EdgeInsets.symmetric(vertical: 6),
                           padding: const EdgeInsets.symmetric(
@@ -149,10 +155,15 @@ class _PaymentPageState extends State<PaymentPage> {
                             vertical: 14,
                           ),
                           decoration: BoxDecoration(
-                            color:
+                            gradient:
                                 sel
-                                    ? gradientEnd.withOpacity(0.2)
-                                    : Colors.grey.shade200,
+                                    ? const LinearGradient(
+                                      begin: Alignment.centerLeft,
+                                      end: Alignment.centerRight,
+                                      colors: [gradientStart, gradientEnd],
+                                    )
+                                    : null,
+                            color: sel ? null : Colors.grey.shade200,
                             borderRadius: BorderRadius.circular(16),
                           ),
                           child: Row(
@@ -168,6 +179,7 @@ class _PaymentPageState extends State<PaymentPage> {
                                   style: GoogleFonts.poppins(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,
+                                    color: sel ? gradientEnd : Colors.black87,
                                   ),
                                 ),
                               ),
@@ -185,8 +197,12 @@ class _PaymentPageState extends State<PaymentPage> {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
             child: ElevatedButton(
               onPressed:
-                  (_selectedIndex != null)
-                      ? () => widget.onSelected(methods[_selectedIndex!])
+                  (_selectedIndex != null && !_isProcessing)
+                      ? () async {
+                        setState(() => _isProcessing = true);
+                        await widget.onSelected(methods[_selectedIndex!]);
+                        setState(() => _isProcessing = false);
+                      }
                       : null,
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 56),
@@ -195,10 +211,25 @@ class _PaymentPageState extends State<PaymentPage> {
                   borderRadius: BorderRadius.circular(28),
                 ),
               ),
-              child: Text(
-                'Pay',
-                style: GoogleFonts.poppins(color: Colors.white, fontSize: 16),
-              ),
+              child:
+                  _isProcessing
+                      ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
+                          strokeWidth: 2,
+                        ),
+                      )
+                      : Text(
+                        'Pay',
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontSize: 16,
+                        ),
+                      ),
             ),
           ),
         );

@@ -5,14 +5,12 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../models/debt.dart';
 import '../services/debt_service.dart';
-import '../models/payment_method.dart';
 import 'payment_page.dart';
 
 class SettleDebtPage extends StatefulWidget {
   const SettleDebtPage({Key? key}) : super(key: key);
-
   @override
-  State<SettleDebtPage> createState() => _SettleDebtPageState();
+  _SettleDebtPageState createState() => _SettleDebtPageState();
 }
 
 class _SettleDebtPageState extends State<SettleDebtPage> {
@@ -26,35 +24,35 @@ class _SettleDebtPageState extends State<SettleDebtPage> {
   }
 
   Future<void> _refresh() async {
-    // do the work first
+    // kick off the fetch
     final next = _service.fetchDebts();
-    // then update state synchronously
+    // synchronously update our state
     setState(() {
       _debtsFuture = next;
     });
-    // now await so pull-to-refresh spinner works
+    // now await the result
     await next;
   }
 
-  void _goToPayment(Debt d) {
+  void _onPay(Debt debt) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder:
             (_) => PaymentPage(
-              debt: d,
+              debt: debt,
               onSelected: (method) async {
-                await _service.settleDebt(d.id);
+                await _service.settleDebt(debt);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
-                      'Settled "${d.title}" with ${method.name}',
+                      'Settled "${debt.title}" via ${method.name}',
                       style: GoogleFonts.poppins(),
                     ),
                   ),
                 );
-                Navigator.pop(context); // back from PaymentPage
-                _refresh(); // reload debts
+                Navigator.pop(context);
+                await _refresh();
               },
             ),
       ),
@@ -67,23 +65,30 @@ class _SettleDebtPageState extends State<SettleDebtPage> {
       appBar: AppBar(
         title: const Text('Settle Debt'),
         leading: const BackButton(),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Cancel',
-              style: GoogleFonts.poppins(color: Colors.white),
-            ),
-          ),
-        ],
       ),
       body: FutureBuilder<List<Debt>>(
         future: _debtsFuture,
         builder: (ctx, snap) {
+          // Debug output
+          print(
+            '▶ [SettleDebtPage] '
+            'state=${snap.connectionState}, '
+            'hasError=${snap.hasError}, '
+            'dataCount=${snap.data?.length ?? 0}',
+          );
+
+          // Loading
           if (snap.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
           }
+          // Error
+          if (snap.hasError) {
+            return Center(child: Text('Error: ${snap.error}'));
+          }
+
           final debts = snap.data ?? [];
+
+          // Empty
           if (debts.isEmpty) {
             return RefreshIndicator(
               onRefresh: _refresh,
@@ -92,7 +97,7 @@ class _SettleDebtPageState extends State<SettleDebtPage> {
                   SizedBox(height: 200),
                   Center(
                     child: Text(
-                      'No debts to settle',
+                      'All caught up!',
                       style: TextStyle(fontSize: 18),
                     ),
                   ),
@@ -100,6 +105,8 @@ class _SettleDebtPageState extends State<SettleDebtPage> {
               ),
             );
           }
+
+          // Display list
           return RefreshIndicator(
             onRefresh: _refresh,
             child: ListView.builder(
@@ -108,22 +115,22 @@ class _SettleDebtPageState extends State<SettleDebtPage> {
               itemBuilder: (ctx, i) {
                 final d = debts[i];
                 return Card(
-                  color: d.iOwe ? Colors.red[50] : Colors.green[50],
                   margin: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 8,
                   ),
+                  color: d.iOwe ? Colors.red[50] : Colors.green[50],
                   child: ListTile(
                     title: Text(
                       d.title,
                       style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
                     ),
                     subtitle: Text(
-                      '\$${d.amount.toStringAsFixed(2)}',
+                      '${d.iOwe ? '-' : ''}\$${d.amount.toStringAsFixed(2)}',
                       style: GoogleFonts.poppins(),
                     ),
                     trailing: ElevatedButton(
-                      onPressed: () => _goToPayment(d),
+                      onPressed: () => _onPay(d),
                       child: const Text('Pay Now'),
                     ),
                   ),

@@ -13,14 +13,14 @@ class AddFriendPage extends StatefulWidget {
 }
 
 class _AddFriendPageState extends State<AddFriendPage> {
-  final _searchController = TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
 
   bool _loadingMe = true;
   bool _isSearching = false;
   bool _isAdding = false;
 
-  String? _myDocId; // your Firestore document ID
-  _UserResult? _foundUser; // result of searching by email
+  String? _myDocId; // ← your Firestore doc ID
+  _UserResult? _foundUser; // holds the search result
 
   @override
   void initState() {
@@ -28,6 +28,8 @@ class _AddFriendPageState extends State<AddFriendPage> {
     _initMyProfile();
   }
 
+  /// 1) Figure out which Firestore doc is *you* (by email),
+  ///    or create it under your Auth UID if it doesn’t exist.
   Future<void> _initMyProfile() async {
     final authUser = FirebaseAuth.instance.currentUser;
     if (authUser == null || authUser.email == null) {
@@ -37,12 +39,12 @@ class _AddFriendPageState extends State<AddFriendPage> {
 
     final col = FirebaseFirestore.instance.collection('users');
     final snap =
-        await col.where('email', isEqualTo: authUser.email).limit(1).get();
+        await col.where('email', isEqualTo: authUser.email!).limit(1).get();
 
     if (snap.docs.isNotEmpty) {
       _myDocId = snap.docs.first.id;
     } else {
-      // fallback: create a user-doc under your auth UID
+      // fallback: create a new user‐doc under your authUID
       _myDocId = authUser.uid;
       await col.doc(_myDocId).set({
         'email': authUser.email,
@@ -55,6 +57,7 @@ class _AddFriendPageState extends State<AddFriendPage> {
     setState(() => _loadingMe = false);
   }
 
+  /// 2) Search for another user by email and store their doc-id
   Future<void> _searchUser() async {
     final email = _searchController.text.trim();
     if (email.isEmpty) return;
@@ -97,12 +100,14 @@ class _AddFriendPageState extends State<AddFriendPage> {
     }
   }
 
+  /// 3) Add friend *both* ways, using Firestore doc IDs
   Future<void> _addFriend() async {
     if (_foundUser == null || _myDocId == null) return;
 
-    final friendUid = _foundUser!.uid;
-    final myUid = FirebaseAuth.instance.currentUser!.uid;
-    if (friendUid == myUid) {
+    final theirDocId = _foundUser!.uid;
+    final myDocId = _myDocId!;
+
+    if (theirDocId == myDocId) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text("You can't add yourself.")));
@@ -111,31 +116,36 @@ class _AddFriendPageState extends State<AddFriendPage> {
 
     setState(() => _isAdding = true);
 
-    final docRef = FirebaseFirestore.instance.collection('users').doc(_myDocId);
+    final meRef = FirebaseFirestore.instance.collection('users').doc(myDocId);
+    final themRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(theirDocId);
 
     try {
-      // read existing friends
-      final snap = await docRef.get();
-      final data = snap.data() ?? {};
-      final List existing = List.from(data['friends'] ?? []);
-
-      if (existing.contains(friendUid)) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Already friends.')));
-        return;
-      }
-
-      // attempt update
+      // — add them to you —
       try {
-        await docRef.update({
-          'friends': FieldValue.arrayUnion([friendUid]),
+        await meRef.update({
+          'friends': FieldValue.arrayUnion([theirDocId]),
         });
       } on FirebaseException catch (e) {
         if (e.code == 'not-found') {
-          // doc was missing? create with merge
-          await docRef.set({
-            'friends': [friendUid],
+          await meRef.set({
+            'friends': [theirDocId],
+          }, SetOptions(merge: true));
+        } else {
+          rethrow;
+        }
+      }
+
+      // — add you to them —
+      try {
+        await themRef.update({
+          'friends': FieldValue.arrayUnion([myDocId]),
+        });
+      } on FirebaseException catch (e) {
+        if (e.code == 'not-found') {
+          await themRef.set({
+            'friends': [myDocId],
           }, SetOptions(merge: true));
         } else {
           rethrow;
@@ -144,7 +154,7 @@ class _AddFriendPageState extends State<AddFriendPage> {
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Friend added!')));
+      ).showSnackBar(const SnackBar(content: Text('Friend added mutually!')));
     } catch (e) {
       debugPrint('Add friend error: $e');
       ScaffoldMessenger.of(
@@ -173,7 +183,7 @@ class _AddFriendPageState extends State<AddFriendPage> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // ─── Search Input ───────────────────
+            // ── search bar ──────────────────────────
             TextField(
               controller: _searchController,
               decoration: InputDecoration(
@@ -200,7 +210,7 @@ class _AddFriendPageState extends State<AddFriendPage> {
 
             const SizedBox(height: 24),
 
-            // ─── Search Result ──────────────────
+            // ── result tile ─────────────────────────
             if (_foundUser != null)
               ListTile(
                 leading: CircleAvatar(
@@ -216,8 +226,8 @@ class _AddFriendPageState extends State<AddFriendPage> {
                 trailing: ElevatedButton(
                   onPressed: _isAdding ? null : _addFriend,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepPurple, // was `primary`
-                    foregroundColor: Colors.white, // was `onPrimary`
+                    backgroundColor: Colors.deepPurple,
+                    foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -246,7 +256,7 @@ class _AddFriendPageState extends State<AddFriendPage> {
   }
 }
 
-/// Simple container for a found user’s info
+/// Simple holder for a found user's info
 class _UserResult {
   final String uid, name, email;
   _UserResult({required this.uid, required this.name, required this.email});
