@@ -3,236 +3,251 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-
-/// Simple User model
-class User {
-  final String id;
-  final String name;
-  final String email;
-  User({required this.id, required this.name, required this.email});
-}
+import 'package:firebase_auth/firebase_auth.dart';
 
 class AddFriendPage extends StatefulWidget {
-  const AddFriendPage({super.key});
+  const AddFriendPage({Key? key}) : super(key: key);
 
   @override
-  State<AddFriendPage> createState() => _AddFriendPageState();
+  _AddFriendPageState createState() => _AddFriendPageState();
 }
 
 class _AddFriendPageState extends State<AddFriendPage> {
-  final _searchCtrl = TextEditingController();
-  List<User> _results = [];
-  bool _loading = false;
+  final _searchController = TextEditingController();
+
+  bool _loadingMe = true;
+  bool _isSearching = false;
+  bool _isAdding = false;
+
+  String? _myDocId; // your Firestore document ID
+  _UserResult? _foundUser; // result of searching by email
 
   @override
-  void dispose() {
-    _searchCtrl.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    _initMyProfile();
   }
 
-  Future<void> _doSearch() async {
-    final term = _searchCtrl.text.trim();
-    if (term.isEmpty) {
-      setState(() => _results = []);
+  Future<void> _initMyProfile() async {
+    final authUser = FirebaseAuth.instance.currentUser;
+    if (authUser == null || authUser.email == null) {
+      setState(() => _loadingMe = false);
       return;
     }
-    setState(() => _loading = true);
+
+    final col = FirebaseFirestore.instance.collection('users');
+    final snap =
+        await col.where('email', isEqualTo: authUser.email).limit(1).get();
+
+    if (snap.docs.isNotEmpty) {
+      _myDocId = snap.docs.first.id;
+    } else {
+      // fallback: create a user-doc under your auth UID
+      _myDocId = authUser.uid;
+      await col.doc(_myDocId).set({
+        'email': authUser.email,
+        'fullName': authUser.displayName ?? '',
+        'friends': <String>[],
+        'createdAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
+
+    setState(() => _loadingMe = false);
+  }
+
+  Future<void> _searchUser() async {
+    final email = _searchController.text.trim();
+    if (email.isEmpty) return;
+
+    setState(() {
+      _isSearching = true;
+      _foundUser = null;
+    });
 
     try {
       final snap =
           await FirebaseFirestore.instance
               .collection('users')
-              .where('email', isEqualTo: term)
+              .where('email', isEqualTo: email)
               .limit(1)
               .get();
 
-      final list =
-          snap.docs.map((doc) {
-            final data = doc.data();
-            final email = data['email'] as String;
-            return User(id: doc.id, name: email, email: email);
-          }).toList();
-
-      setState(() => _results = list);
+      if (snap.docs.isEmpty) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('No user found.')));
+      } else {
+        final doc = snap.docs.first;
+        final data = doc.data();
+        setState(() {
+          _foundUser = _UserResult(
+            uid: doc.id,
+            name: (data['fullName'] ?? '') as String,
+            email: data['email'] as String,
+          );
+        });
+      }
     } catch (e) {
-      debugPrint('Firestore search error: $e');
-      setState(() => _results = []);
+      debugPrint('Search error: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Search failed.')));
     } finally {
-      setState(() => _loading = false);
+      setState(() => _isSearching = false);
     }
   }
 
-  void _sendRequest(User u) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Friend request sent to ${u.email}!')),
-    );
+  Future<void> _addFriend() async {
+    if (_foundUser == null || _myDocId == null) return;
+
+    final friendUid = _foundUser!.uid;
+    final myUid = FirebaseAuth.instance.currentUser!.uid;
+    if (friendUid == myUid) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("You can't add yourself.")));
+      return;
+    }
+
+    setState(() => _isAdding = true);
+
+    final docRef = FirebaseFirestore.instance.collection('users').doc(_myDocId);
+
+    try {
+      // read existing friends
+      final snap = await docRef.get();
+      final data = snap.data() ?? {};
+      final List existing = List.from(data['friends'] ?? []);
+
+      if (existing.contains(friendUid)) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Already friends.')));
+        return;
+      }
+
+      // attempt update
+      try {
+        await docRef.update({
+          'friends': FieldValue.arrayUnion([friendUid]),
+        });
+      } on FirebaseException catch (e) {
+        if (e.code == 'not-found') {
+          // doc was missing? create with merge
+          await docRef.set({
+            'friends': [friendUid],
+          }, SetOptions(merge: true));
+        } else {
+          rethrow;
+        }
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Friend added!')));
+    } catch (e) {
+      debugPrint('Add friend error: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Failed to add friend.')));
+    } finally {
+      setState(() => _isAdding = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    const gradientStart = Color(0xFF7B5FFF);
-    const gradientEnd = Color(0xFFFB56A5);
+    if (_loadingMe) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
 
     return Scaffold(
-      body: Column(
-        children: [
-          // ─── HEADER ──────────────────────
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.only(
-              top: 60,
-              bottom: 24,
-              left: 16,
-              right: 16,
-            ),
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [gradientStart, gradientEnd],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+      appBar: AppBar(title: const Text('Add Friend')),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            // ─── Search Input ───────────────────
+            TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search by email',
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
-              borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
+              onSubmitted: (_) => _searchUser(),
             ),
-            child: Row(
-              children: [
-                BackButton(color: Colors.white),
-                const SizedBox(width: 8),
-                Text(
-                  'Add a Friend',
-                  style: GoogleFonts.poppins(
-                    fontSize: 22,
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: _isSearching ? null : _searchUser,
+              child:
+                  _isSearching
+                      ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : const Text('Search'),
             ),
-          ),
 
-          // ─── SEARCH BAR ──────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchCtrl,
-                    style: GoogleFonts.poppins(),
-                    decoration: InputDecoration(
-                      hintText: 'Search by email',
-                      hintStyle: GoogleFonts.poppins(color: Colors.black38),
-                      filled: true,
-                      fillColor: Colors.grey.shade100,
-                      prefixIcon: const Icon(
-                        Icons.search,
-                        color: Colors.black54,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                    onSubmitted: (_) => _doSearch(),
-                  ),
+            const SizedBox(height: 24),
+
+            // ─── Search Result ──────────────────
+            if (_foundUser != null)
+              ListTile(
+                leading: CircleAvatar(
+                  child: Text(_foundUser!.email[0].toUpperCase()),
                 ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: _loading ? null : _doSearch,
+                title: Text(
+                  _foundUser!.name.isNotEmpty
+                      ? _foundUser!.name
+                      : _foundUser!.email,
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text(_foundUser!.email),
+                trailing: ElevatedButton(
+                  onPressed: _isAdding ? null : _addFriend,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: gradientEnd,
+                    backgroundColor: Colors.deepPurple, // was `primary`
+                    foregroundColor: Colors.white, // was `onPrimary`
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(8),
                     ),
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
+                      horizontal: 20,
+                      vertical: 12,
                     ),
                   ),
                   child:
-                      _loading
+                      _isAdding
                           ? const SizedBox(
-                            width: 16,
-                            height: 16,
+                            width: 24,
+                            height: 24,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
                               color: Colors.white,
                             ),
                           )
-                          : Text(
-                            'Go',
-                            style: GoogleFonts.poppins(color: Colors.white),
-                          ),
+                          : Text('Add', style: GoogleFonts.poppins()),
                 ),
-              ],
-            ),
-          ),
-
-          // ─── RESULTS ─────────────────────
-          Expanded(
-            child:
-                _loading
-                    ? const Center(child: CircularProgressIndicator())
-                    : _searchCtrl.text.trim().isEmpty
-                    ? Center(
-                      child: Text(
-                        'Enter an email above',
-                        style: GoogleFonts.poppins(color: Colors.black38),
-                      ),
-                    )
-                    : _results.isEmpty
-                    ? Center(
-                      child: Text(
-                        'No users found',
-                        style: GoogleFonts.poppins(color: Colors.black38),
-                      ),
-                    )
-                    : ListView.separated(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: _results.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 12),
-                      itemBuilder: (ctx, i) {
-                        final u = _results[i];
-                        return Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              child: Text(u.email[0].toUpperCase()),
-                            ),
-                            title: Text(
-                              u.email,
-                              style: GoogleFonts.poppins(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            trailing: ElevatedButton(
-                              onPressed: () => _sendRequest(u),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: gradientStart,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 8,
-                                ),
-                              ),
-                              child: Text(
-                                'Add',
-                                style: GoogleFonts.poppins(color: Colors.white),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-          ),
-        ],
+              ),
+          ],
+        ),
       ),
     );
   }
+}
+
+/// Simple container for a found user’s info
+class _UserResult {
+  final String uid, name, email;
+  _UserResult({required this.uid, required this.name, required this.email});
 }
