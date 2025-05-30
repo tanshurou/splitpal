@@ -9,10 +9,23 @@ class GroupDashboardPage extends StatelessWidget {
   const GroupDashboardPage({super.key, required this.groupId});
 
   Future<void> leaveGroup(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Leave Group?"),
+        content: const Text("Are you sure you want to leave this group?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Leave")),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) return;
 
-    // Get user's custom UID like "U001"
     final userSnapshot = await FirebaseFirestore.instance
         .collection('users')
         .where('email', isEqualTo: currentUser.email)
@@ -25,7 +38,7 @@ class GroupDashboardPage extends StatelessWidget {
       'members': FieldValue.arrayRemove([userId])
     });
 
-    Navigator.pop(context); // go back to Group Page
+    Navigator.pop(context);
   }
 
   Future<void> addMembers(BuildContext context) async {
@@ -71,12 +84,7 @@ class GroupDashboardPage extends StatelessWidget {
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: const Text('Cancel'),
-            ),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
             ElevatedButton(
               onPressed: () async {
                 await groupRef.update({
@@ -84,7 +92,7 @@ class GroupDashboardPage extends StatelessWidget {
                 });
                 Navigator.pop(context);
               },
-              child: const Text('Add'),
+              child: const Text("Add"),
             ),
           ],
         );
@@ -133,10 +141,7 @@ class GroupDashboardPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  groupName,
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
+                Text(groupName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                 Text('$memberCount members', style: const TextStyle(color: Colors.grey)),
                 const SizedBox(height: 16),
 
@@ -159,26 +164,25 @@ class GroupDashboardPage extends StatelessWidget {
                         Text('RM$total unpaid debt', style: const TextStyle(fontSize: 16)),
                         const SizedBox(height: 8),
                         SizedBox(
-                          height: 180,
+                          height: 200,
                           child: PieChart(
                             PieChartData(
-                              centerSpaceRadius: 50,
+                              centerSpaceRadius: 60,
                               sections: [
                                 PieChartSectionData(
                                   color: Colors.green,
                                   value: settled.toDouble(),
-                                  title: 'Settled',
+                                  title: '',
                                   radius: 50,
-                                  titleStyle: const TextStyle(fontSize: 14, color: Colors.white),
                                 ),
                                 PieChartSectionData(
                                   color: Colors.red,
                                   value: unsettled.toDouble(),
-                                  title: 'Unsettled',
+                                  title: '',
                                   radius: 50,
-                                  titleStyle: const TextStyle(fontSize: 14, color: Colors.white),
                                 ),
                               ],
+                              sectionsSpace: 0,
                             ),
                           ),
                         ),
@@ -188,18 +192,12 @@ class GroupDashboardPage extends StatelessWidget {
                   },
                 ),
 
-                const Text(
-                  'Pending',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
+                const Text('Pending', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 const SizedBox(height: 8),
 
                 Expanded(
                   child: StreamBuilder<QuerySnapshot>(
-                    stream: groupRef
-                        .collection('activityLog')
-                        .orderBy('timestamp', descending: true)
-                        .snapshots(),
+                    stream: groupRef.collection('activityLog').orderBy('timestamp', descending: true).snapshots(),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
                         return const Text('Loading...');

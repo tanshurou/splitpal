@@ -14,8 +14,47 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
   final List<String> _selectedUserIds = [];
   bool _isCreating = false;
   String _selectedIcon = '👥';
+  List<DocumentSnapshot> _friendDocs = [];
 
   final List<String> _availableIcons = ['🛍️', '🎂', '🍽️', '✈️', '👥'];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFriendList();
+  }
+
+  Future<void> _loadFriendList() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    final userSnapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .where('email', isEqualTo: currentUser.email)
+        .limit(1)
+        .get();
+
+    if (userSnapshot.docs.isEmpty) return;
+
+    final userDoc = userSnapshot.docs.first;
+    final friendIds = List<String>.from(userDoc['friends'] ?? []);
+
+    final allUsersSnapshot = await FirebaseFirestore.instance.collection('users').get();
+    setState(() {
+      _friendDocs = allUsersSnapshot.docs.where((doc) => friendIds.contains(doc.id)).toList();
+    });
+  }
+
+  Future<String> _generateNextGroupCode() async {
+    final counterRef = FirebaseFirestore.instance.collection('counters').doc('groups');
+    final counterSnap = await counterRef.get();
+
+    int current = counterSnap.exists ? counterSnap['count'] ?? 0 : 0;
+    final next = current + 1;
+
+    await counterRef.set({'count': next});
+    return 'G${next.toString().padLeft(3, '0')}';
+  }
 
   Future<void> _createGroup() async {
     final currentUser = FirebaseAuth.instance.currentUser;
@@ -33,6 +72,7 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
     final snapshot = await FirebaseFirestore.instance
         .collection('users')
         .where('email', isEqualTo: currentUser.email)
+        .limit(1)
         .get();
 
     if (snapshot.docs.isEmpty) {
@@ -43,8 +83,11 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
     final currentUserId = snapshot.docs.first.id;
     final memberList = {currentUserId, ..._selectedUserIds}.toList();
 
-    final groupId = await _getNextGroupId();
-    await FirebaseFirestore.instance.collection('group').doc(groupId).set({
+    final groupCode = await _generateNextGroupCode();
+    final groupDoc = FirebaseFirestore.instance.collection('group').doc();
+
+    await groupDoc.set({
+      'groupCode': groupCode,
       'name': groupName,
       'createdBy': currentUserId,
       'date': Timestamp.now(),
@@ -54,12 +97,6 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
 
     setState(() => _isCreating = false);
     Navigator.pop(context);
-  }
-
-  Future<String> _getNextGroupId() async {
-    final snapshot = await FirebaseFirestore.instance.collection('group').get();
-    final count = snapshot.docs.length;
-    return 'G${(count + 1).toString().padLeft(3, '0')}';
   }
 
   @override
@@ -91,49 +128,40 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
               }).toList(),
             ),
             const SizedBox(height: 20),
-            const Text('Add Members:', style: TextStyle(fontSize: 16)),
+            const Text('Add Friends:', style: TextStyle(fontSize: 16)),
             const SizedBox(height: 8),
             Expanded(
-              child: StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance.collection('users').snapshots(),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) return const CircularProgressIndicator();
-                  final currentUser = FirebaseAuth.instance.currentUser;
-                  final users = snapshot.data!.docs.where((doc) =>
-                      (doc.data() as Map<String, dynamic>)['email'] != currentUser?.email);
+              child: _friendDocs.isEmpty
+                  ? const Center(child: Text("No friends to show."))
+                  : ListView(
+                      children: _friendDocs.map((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final uid = doc.id;
+                        final name = data['fullName'] ?? 'Unknown';
+                        final isSelected = _selectedUserIds.contains(uid);
 
-                  return ListView(
-                    children: users.map((doc) {
-                      final data = doc.data() as Map<String, dynamic>;
-                      final uid = doc.id;
-                      final name = data['fullName'] ?? 'Unknown';
-                      final isSelected = _selectedUserIds.contains(uid);
-
-                      return CheckboxListTile(
-                        title: Text(name),
-                        value: isSelected,
-                        onChanged: (checked) {
-                          setState(() {
-                            if (checked == true) {
-                              _selectedUserIds.add(uid);
-                            } else {
-                              _selectedUserIds.remove(uid);
-                            }
-                          });
-                        },
-                      );
-                    }).toList(),
-                  );
-                },
-              ),
+                        return CheckboxListTile(
+                          title: Text(name),
+                          value: isSelected,
+                          onChanged: (checked) {
+                            setState(() {
+                              if (checked == true) {
+                                _selectedUserIds.add(uid);
+                              } else {
+                                _selectedUserIds.remove(uid);
+                              }
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
             ),
             const SizedBox(height: 16),
             Center(
               child: ElevatedButton(
                 onPressed: _isCreating ? null : _createGroup,
                 child: _isCreating
-                    ? const SizedBox(
-                        width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                     : const Text('Create Group'),
               ),
             ),
