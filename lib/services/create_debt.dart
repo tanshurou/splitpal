@@ -125,7 +125,7 @@ Future<void> checkAndCreateDebts(String expenseId) async {
   // Update approvalStatus to prevent duplicate creation
   batch.update(expenseRef, {
     'approvalStatus': {
-      for (var uid in approvalStatus.keys) uid: 'debt_created',
+      for (var uid in approvalStatus.keys) uid: 'debt created',
     },
   });
 

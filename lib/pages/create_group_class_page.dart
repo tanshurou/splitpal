@@ -45,15 +45,18 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
     });
   }
 
-  Future<String> _generateNextGroupCode() async {
+  Future<String> _getNextGroupId() async {
     final counterRef = FirebaseFirestore.instance.collection('counters').doc('groups');
-    final counterSnap = await counterRef.get();
+    final snapshot = await counterRef.get();
 
-    int current = counterSnap.exists ? counterSnap['count'] ?? 0 : 0;
-    final next = current + 1;
+    int next = 1;
+    if (snapshot.exists) {
+      next = (snapshot.data()?['count'] ?? 0) + 1;
+    }
 
+    final newId = 'G${next.toString().padLeft(3, '0')}';
     await counterRef.set({'count': next});
-    return 'G${next.toString().padLeft(3, '0')}';
+    return newId;
   }
 
   Future<void> _createGroup() async {
@@ -83,11 +86,8 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
     final currentUserId = snapshot.docs.first.id;
     final memberList = {currentUserId, ..._selectedUserIds}.toList();
 
-    final groupCode = await _generateNextGroupCode();
-    final groupDoc = FirebaseFirestore.instance.collection('group').doc();
-
-    await groupDoc.set({
-      'groupCode': groupCode,
+    final groupId = await _getNextGroupId(); // G006, G007, etc.
+    await FirebaseFirestore.instance.collection('group').doc(groupId).set({
       'name': groupName,
       'createdBy': currentUserId,
       'date': Timestamp.now(),
