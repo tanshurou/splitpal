@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-// Expense Details Page
 class ExpenseDetailsPage extends StatelessWidget {
   final String expenseId;
   const ExpenseDetailsPage({super.key, required this.expenseId});
 
   @override
   Widget build(BuildContext context) {
-    final expenseRef =
-        FirebaseFirestore.instance.collection('expenses').doc(expenseId);
+    final expenseRef = FirebaseFirestore.instance.collection('expenses').doc(expenseId);
 
     return Scaffold(
       appBar: AppBar(

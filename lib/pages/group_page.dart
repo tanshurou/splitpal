@@ -23,56 +23,12 @@ class _GroupPageState extends State<GroupPage> {
     return snapshot.docs.isNotEmpty ? snapshot.docs.first.id : null;
   }
 
-  Future<String> _getStatusMessage(String userId, String groupId) async {
-    try {
-      final expenseSnapshot = await FirebaseFirestore.instance
-          .collection('expenses')
-          .where('groupId', isEqualTo: groupId)
-          .get();
-
-      if (expenseSnapshot.docs.isEmpty) {
-        return "No expenses found";
-      }
-
-      double userOwes = 0;
-      double userOwed = 0;
-
-      for (var expenseDoc in expenseSnapshot.docs) {
-        final data = expenseDoc.data();
-        final paymentStatus = Map<String, dynamic>.from(data['paymentStatus'] ?? {});
-        final userAmounts = Map<String, dynamic>.from(data['userAmounts'] ?? {});
-
-        if (paymentStatus[userId] == 'unpaid') {
-          final amountOwed = userAmounts[userId] ?? 0.0;
-          userOwes += amountOwed;
-        }
-
-        for (var uid in userAmounts.keys) {
-          if (uid != userId && paymentStatus[uid] == 'unpaid') {
-            userOwed += userAmounts[uid] ?? 0.0;
-          }
-        }
-      }
-
-      if (userOwes == 0 && userOwed == 0) {
-        return "settled up";
-      } else if (userOwed > 0) {
-        return "you are owed RM${userOwed.toStringAsFixed(2)}";
-      } else {
-        return "you owe RM${userOwes.toStringAsFixed(2)}";
-      }
-    } catch (e) {
-      print("Error fetching group status: $e");
-      return "Error fetching data";
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
-    return FutureBuilder<String?>(
+    return FutureBuilder<String?>( 
       future: _getCustomUserId(currentUser.email!),
       builder: (context, userSnapshot) {
         if (!userSnapshot.hasData) return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -136,35 +92,25 @@ class _GroupPageState extends State<GroupPage> {
                         final groupIcon = data['icon'] ?? '👥';
                         final groupId = doc.id;
 
-                        return FutureBuilder<String>(
-                          future: _getStatusMessage(userId, groupId), 
-                          builder: (context, statusSnapshot) {
-                            String status = "Loading...";
-                            if (statusSnapshot.hasData) {
-                              status = statusSnapshot.data!;
-                            }
-
-                            return Card(
-                              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              child: ListTile(
-                                contentPadding: const EdgeInsets.all(16),
-                                leading: CircleAvatar(
-                                  radius: 24,
-                                  backgroundColor: Colors.purple.shade100,
-                                  child: Text(groupIcon, style: const TextStyle(fontSize: 24)),
-                                ),
-                                title: Text(groupName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                subtitle: Text(status),
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(builder: (_) => GroupDashboardPage(groupId: groupId)),
-                                  );
-                                },
-                              ),
-                            );
-                          },
+                        return Card(
+                          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.all(16),
+                            leading: CircleAvatar(
+                              radius: 24,
+                              backgroundColor: Colors.purple.shade100,
+                              child: Text(groupIcon, style: const TextStyle(fontSize: 24)),
+                            ),
+                            title: Text(groupName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                            // Removed subtitle (owe/owed/settled status)
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => GroupDashboardPage(groupId: groupId)),
+                              );
+                            },
+                          ),
                         );
                       },
                     );

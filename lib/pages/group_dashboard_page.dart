@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:splitpal/pages/expense_details_page.dart';
+import 'package:splitpal/services/create_debt.dart';
 
 class GroupDashboardPage extends StatefulWidget {
   final String groupId;
@@ -88,6 +89,38 @@ class _GroupDashboardPageState extends State<GroupDashboardPage> {
     return userTotals;
   }
 
+  // Function to approve an expense and update the approval status
+  Future<void> _approveExpense(String expenseId) async {
+    final expenseRef = FirebaseFirestore.instance.collection('expenses').doc(expenseId);
+
+    try {
+      final expenseSnapshot = await expenseRef.get();
+      final expenseData = expenseSnapshot.data()!;
+      final paidBy = expenseData['paidBy'];
+      if (currentUserId == null) {
+        print("User is not authenticated.");
+        return;
+      }
+      await expenseRef.update({
+        'approvalStatus.$currentUserId': 'approved',
+      });
+
+      if (currentUserId == paidBy) {
+        await expenseRef.update({
+          'paymentStatus.$currentUserId': 'paid',
+        });
+      }
+
+      checkAndCreateDebts(expenseId);
+
+      setState(() {
+        // Refresh the data after approval
+      });
+    } catch (e) {
+      print("Error approving expense: $e");
+    }
+  }
+
   // Function to handle leaving the group with confirmation
   Future<void> _leaveGroup() async {
     final confirmed = await showDialog<bool>(
@@ -151,12 +184,12 @@ class _GroupDashboardPageState extends State<GroupDashboardPage> {
                 if (!snapshot.hasData) return const SizedBox(height: 180);
 
                 final data = snapshot.data!;
-                final total = data.values.fold(0.0, (a, b) => a + b);
+                final totalOwed = data.values.fold(0.0, (a, b) => a + b);
                 final colors = [const Color(0xFF90EE90), const Color(0xFFFFC0CB)];
 
                 final pieSections = <PieChartSectionData>[];
-                int colorIndex = 0;
 
+                int colorIndex = 0;
                 for (var entry in data.entries) {
                   final uid = entry.key;
                   final name = userNames[uid] ?? uid;
@@ -192,7 +225,7 @@ class _GroupDashboardPageState extends State<GroupDashboardPage> {
                   ),
                   child: Column(
                     children: [
-                      Text('RM${total.toStringAsFixed(2)} unpaid debt',
+                      Text('RM${totalOwed.toStringAsFixed(2)} unpaid debt',
                           style: const TextStyle(fontSize: 16)),
                       const SizedBox(height: 8),
                       SizedBox(
@@ -214,7 +247,7 @@ class _GroupDashboardPageState extends State<GroupDashboardPage> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,  // Adjust to space out the buttons
               children: [
                 Expanded(
                   child: GestureDetector(
@@ -278,129 +311,115 @@ class _GroupDashboardPageState extends State<GroupDashboardPage> {
           ),
           const SizedBox(height: 12),
           Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: expensesQuery.orderBy('date', descending: true).snapshots(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+            child: StreamBuilder<QuerySnapshot>(
+              stream: expensesQuery.orderBy('date', descending: true).snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
-              final docs = snapshot.data!.docs;
-              final filtered = docs.where((doc) {
-                final data = doc.data() as Map<String, dynamic>;
-                final approval = Map<String, dynamic>.from(data['approvalStatus'] ?? {});
-                final userApproval = approval[currentUserId];
-
-                // Approving logic
-                final hasApproved = userApproval == 'approved' || userApproval == 'debt_created';
-
-                return showSplit ? hasApproved : !hasApproved;
-              }).toList();
-
-              if (filtered.isEmpty) return const Center(child: Text("No items to show"));
-
-              return ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: filtered.length,
-                itemBuilder: (context, index) {
-                  final doc = filtered[index];
+                final docs = snapshot.data!.docs;
+                final filtered = docs.where((doc) {
                   final data = doc.data() as Map<String, dynamic>;
-                  final title = data['title'] ?? 'Untitled';
-                  final amount = data['amount'] ?? 0;
                   final approval = Map<String, dynamic>.from(data['approvalStatus'] ?? {});
-                  final splitAmong = List<String>.from(data['splitAmong'] ?? []);
-                  final approvedCount = splitAmong
-                      .where((uid) => approval[uid] == 'approved' || approval[uid] == 'debt_created')
-                      .length;
+                  final userApproval = approval[currentUserId];
 
-                  // Function to handle approval
-                  Future<void> _approveExpense(String expenseId) async {
-                    final expenseRef = FirebaseFirestore.instance.collection('expenses').doc(expenseId);
+                  // Approving logic
+                  final hasApproved = userApproval == 'approved' || userApproval == 'debt_created';
 
-                    try {
-                      await expenseRef.update({
-                        'approvalStatus.$currentUserId': 'approved', // Mark as approved
-                      });
-                    } catch (e) {
-                      print("Error approving expense: $e");
-                    }
-                  }
+                  return showSplit ? hasApproved : !hasApproved;
+                }).toList();
 
-                  return GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ExpenseDetailsPage(expenseId: doc.id),
-                        ),
-                      );
-                    },
-                    child: Card(
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      elevation: 4,
-                      margin: const EdgeInsets.only(bottom: 16),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.receipt_long, size: 24),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(title,
-                                      style: const TextStyle(
-                                          fontSize: 16, fontWeight: FontWeight.bold)),
-                                ),
-                                Text('RM${amount.toStringAsFixed(2)}'),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            LinearProgressIndicator(
-                              value: splitAmong.isEmpty
-                                  ? 0
-                                  : approvedCount / splitAmong.length,
-                              backgroundColor: Colors.grey.shade300,
-                              valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF90EE90)),
-                            ),
-                            const SizedBox(height: 4),
-                            Text('$approvedCount / ${splitAmong.length} approved',
-                                style: const TextStyle(fontSize: 12)),
-                            const SizedBox(height: 8),
-                            ...splitAmong.map((uid) {
-                              final name = userNames[uid] ?? uid;
-                              final status = approval[uid] ?? 'pending';
-                              final color = status == 'approved' || status == 'debt_created'
-                                  ? const Color(0xFF90EE90)
-                                  : Colors.pink;
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 2),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.person, size: 16, color: color),
-                                    const SizedBox(width: 4),
-                                    Text(name),
-                                    const SizedBox(width: 4),
-                                    Text('– $status', style: TextStyle(color: color)),
-                                  ],
-                                ),
-                              );
-                            }),
-                            if (approval[currentUserId] == 'pending')
-                              ElevatedButton(
-                                onPressed: () => _approveExpense(doc.id),
-                                child: const Text("Approve"),
+                if (filtered.isEmpty) return const Center(child: Text("No items to show"));
+
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: filtered.length,
+                  itemBuilder: (context, index) {
+                    final doc = filtered[index];
+                    final data = doc.data() as Map<String, dynamic>;
+                    final title = data['title'] ?? 'Untitled';
+                    final amount = data['amount'] ?? 0;
+                    final approval = Map<String, dynamic>.from(data['approvalStatus'] ?? {});
+                    final splitAmong = List<String>.from(data['splitAmong'] ?? []);
+                    final approvedCount = splitAmong
+                        .where((uid) => approval[uid] == 'approved' || approval[uid] == 'debt_created')
+                        .length;
+
+                    return GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ExpenseDetailsPage(expenseId: doc.id),
+                          ),
+                        );
+                      },
+                      child: Card(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        elevation: 4,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.receipt_long, size: 24),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(title,
+                                        style: const TextStyle(
+                                            fontSize: 16, fontWeight: FontWeight.bold)),
+                                  ),
+                                  Text('RM${amount.toStringAsFixed(2)}'),
+                                ],
                               ),
-                          ],
+                              const SizedBox(height: 8),
+                              LinearProgressIndicator(
+                                value: splitAmong.isEmpty
+                                    ? 0
+                                    : approvedCount / splitAmong.length,
+                                backgroundColor: Colors.grey.shade300,
+                                valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF90EE90)),
+                              ),
+                              const SizedBox(height: 4),
+                              Text('$approvedCount / ${splitAmong.length} approved',
+                                  style: const TextStyle(fontSize: 12)),
+                              const SizedBox(height: 8),
+                              ...splitAmong.map((uid) {
+                                final name = userNames[uid] ?? uid;
+                                final status = approval[uid] ?? 'pending';
+                                final color = status == 'approved' || status == 'debt_created'
+                                    ? const Color(0xFF90EE90)
+                                    : Colors.pink;
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 2),
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.person, size: 16, color: color),
+                                      const SizedBox(width: 4),
+                                      Text(name),
+                                      const SizedBox(width: 4),
+                                      Text('– $status', style: TextStyle(color: color)),
+                                    ],
+                                  ),
+                                );
+                              }),
+                              if (approval[currentUserId] == 'pending')
+                                ElevatedButton(
+                                  onPressed: () => _approveExpense(doc.id),
+                                  child: const Text("Approve"),
+                                ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                  );
-                },
-              );
-            },
+                    );
+                  },
+                );
+              },
+            ),
           ),
-        )
-
         ],
       ),
       floatingActionButton: FloatingActionButton(

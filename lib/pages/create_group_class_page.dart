@@ -16,7 +16,7 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
   String _selectedIcon = '👥';
   List<DocumentSnapshot> _friendDocs = [];
 
-  final List<String> _availableIcons = ['🛍️', '🎂', '🍽️', '✈️', '👥'];
+   final List<String> _availableIcons = ['🛍️', '🎂', '🍽️', '✈️', '👥', '🎮', '🏖️', '🎉'];
 
   @override
   void initState() {
