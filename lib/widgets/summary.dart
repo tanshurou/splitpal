@@ -106,9 +106,9 @@ class UserSummary extends StatelessWidget {
                 flex: 1,
                 child: Padding(
                   padding: const EdgeInsets.only(
-                    top: 30,
-                    left: 4,
-                  ), // moved down and left
+                    top: 48,
+                    right: 16,
+                  ), // Adjusted padding
                   child: SizedBox(
                     width: 100,
                     height: 100,
@@ -118,7 +118,12 @@ class UserSummary extends StatelessWidget {
                             (owe == 0 && owed == 0)
                                 ? [
                                   PieChartSectionData(
-                                    color: Colors.purple.shade100,
+                                    color: const Color.fromARGB(
+                                      255,
+                                      179,
+                                      179,
+                                      179,
+                                    ),
                                     value: 1,
                                     radius: 30,
                                     title: '',
@@ -126,7 +131,12 @@ class UserSummary extends StatelessWidget {
                                 ]
                                 : [
                                   PieChartSectionData(
-                                    color: Colors.pink[300],
+                                    color: const Color.fromARGB(
+                                      255,
+                                      255,
+                                      136,
+                                      176,
+                                    ),
                                     value: owe,
                                     radius: 30,
                                     title: '',
@@ -134,9 +144,9 @@ class UserSummary extends StatelessWidget {
                                   PieChartSectionData(
                                     color: const Color.fromARGB(
                                       255,
-                                      172,
-                                      233,
-                                      102,
+                                      214,
+                                      248,
+                                      129,
                                     ),
                                     value: owed,
                                     radius: 30,

@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:splitpal/pages/group_page.dart';
+import 'package:splitpal/services/create_debt.dart';
 import 'package:splitpal/services/getUserID.dart';
 import 'package:splitpal/widgets/bottom_nav_bar.dart';
 import 'package:splitpal/pages/group_dashboard_page.dart';
@@ -44,11 +45,11 @@ class _HomePageState extends State<HomePage> {
         }
 
         final userId = snapshot.data!;
+
         final pages = [
           PersonalDashboardPage(),
           GroupPage(),
           HistoryPage(userId: userId),
-          SettingsPage(),
           SettleDebtPage(),
           const ProfilePage(),
         ];
