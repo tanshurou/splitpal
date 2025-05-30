@@ -6,16 +6,10 @@ class DebtService {
   final _db = FirebaseFirestore.instance;
   String? _userDocId;
 
-  /// 1) Resolve (and cache) the Firestore doc-ID for the signed-in user
+  /// Resolve (and cache) the Firestore doc-ID for the signed-in user.
   Future<String> _getUserDocId() async {
     if (_userDocId != null) return _userDocId!;
-
-    final me = FirebaseAuth.instance.currentUser;
-    if (me == null || me.email == null) {
-      throw Exception('Not authenticated');
-    }
-
-    // Look up by email
+    final me = FirebaseAuth.instance.currentUser!;
     final snap =
         await _db
             .collection('users')
@@ -25,11 +19,7 @@ class DebtService {
 
     if (snap.docs.isNotEmpty) {
       _userDocId = snap.docs.first.id;
-      print(
-        '⤷ [DebtService] mapped auth-email ${me.email} → docID=$_userDocId',
-      );
     } else {
-      // Fallback: create a user-doc under auth UID
       _userDocId = me.uid;
       await _db.collection('users').doc(_userDocId).set({
         'email': me.email,
@@ -37,76 +27,89 @@ class DebtService {
         'friends': <String>[],
         'createdAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
-      print(
-        '⤷ [DebtService] no existing doc for ${me.email}, created new docID=$_userDocId',
-      );
     }
-
     return _userDocId!;
   }
 
-  /// 2) Fetch unpaid debts under users/{docId}/debt
+  /// Fetch one-time list of unpaid debts.
   Future<List<Debt>> fetchDebts() async {
     final uid = await _getUserDocId();
-    print('⤷ [DebtService] loading debts for Firestore user-doc: $uid');
-
-    final coll = _db.collection('users').doc(uid).collection('debt');
-    final snap = await coll.where('status', isEqualTo: 'unpaid').get();
-
-    print(
-      '⤷ [DebtService] found ${snap.docs.length} unpaid debts: '
-      '${snap.docs.map((d) => d.id).toList()}',
-    );
-
+    final snap =
+        await _db
+            .collection('users')
+            .doc(uid)
+            .collection('debt')
+            .where('status', isEqualTo: 'unpaid')
+            .get();
     return snap.docs.map((d) => Debt.fromFirestore(d)).toList();
   }
 
-  /// 3) Settle a debt: batch-update debt.status, your userSummary, their userSummary, and groupSummary
-  Future<void> settleDebt(Debt debt) async {
+  /// Real‐time stream of unpaid debts—UI will update automatically.
+  Stream<List<Debt>> streamDebts() async* {
     final uid = await _getUserDocId();
-    final batch = _db.batch();
-
-    // mark debt paid
-    final debtRef = _db
+    yield* _db
         .collection('users')
         .doc(uid)
         .collection('debt')
-        .doc(debt.id);
-    batch.update(debtRef, {
-      'status': 'paid',
-      'paymentDate': FieldValue.serverTimestamp(),
-    });
+        .where('status', isEqualTo: 'unpaid')
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => Debt.fromFirestore(d)).toList());
+  }
 
-    // your summary: owe -= amount
-    final mySumRef = _db
-        .collection('users')
-        .doc(uid)
-        .collection('userSummary')
-        .doc('userSummary');
-    batch.update(mySumRef, {'owe': FieldValue.increment(-debt.amount)});
+  /// Settle a debt and atomically update:
+  ///  • the debt doc,
+  ///  • both users’ summaries,
+  ///  • the group summary,
+  ///  • **AND** mark this user as paid in `expenses/{expenseID}.paymentStatus.{uid}`.
+  Future<void> settleDebt(Debt debt) async {
+    final meId = await _getUserDocId();
+    final batch = _db.batch();
 
-    // their summary: owed -= amount
-    final theirSumRef = _db
-        .collection('users')
-        .doc(debt.payTo)
-        .collection('userSummary')
-        .doc('userSummary');
-    batch.update(theirSumRef, {'owed': FieldValue.increment(-debt.amount)});
-
-    // group summary
-    final grpSumRef = _db
-        .collection('group')
-        .doc(debt.groupID)
-        .collection('groupSummary')
-        .doc('groupSummary');
-    batch.update(grpSumRef, {
-      'settleDebts': FieldValue.increment(1),
-      'unsettledDebts': FieldValue.increment(-1),
-    });
-
-    await batch.commit();
-    print(
-      '⤷ [DebtService] settled debt ${debt.id} for $uid; updated summaries.',
+    // 1) Mark this debt paid
+    batch.update(
+      _db.collection('users').doc(meId).collection('debt').doc(debt.id),
+      {'status': 'paid', 'paymentDate': FieldValue.serverTimestamp()},
     );
+
+    // 2) Decrement your owe
+    batch.update(
+      _db
+          .collection('users')
+          .doc(meId)
+          .collection('userSummary')
+          .doc('userSummary'),
+      {'owe': FieldValue.increment(-debt.amount)},
+    );
+
+    // 3) Decrement their owed
+    batch.update(
+      _db
+          .collection('users')
+          .doc(debt.payTo)
+          .collection('userSummary')
+          .doc('userSummary'),
+      {'owed': FieldValue.increment(-debt.amount)},
+    );
+
+    // 4) Update group summary
+    batch.update(
+      _db
+          .collection('group')
+          .doc(debt.groupID)
+          .collection('groupSummary')
+          .doc('groupSummary'),
+      {
+        'settleDebts': FieldValue.increment(1),
+        'unsettledDebts': FieldValue.increment(-1),
+      },
+    );
+
+    // 5) Mark this user as paid in the master expense doc
+    batch.update(_db.collection('expenses').doc(debt.expenseID), {
+      'paymentStatus.$meId': 'paid',
+    });
+
+    // Commit all at once
+    await batch.commit();
   }
 }

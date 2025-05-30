@@ -1,5 +1,3 @@
-// lib/models/debt.dart
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -7,12 +5,12 @@ class Debt {
   final String id;
   final String title;
   final double amount;
-  final String payTo; // UID of the other user
+  final String payTo;
   final String groupID;
-  final String status; // 'unpaid' or 'paid'
+  final String status;
+  final String expenseID; // ← NEW!
   final Timestamp? paymentDate;
 
-  /// True when the *current* user owes someone else
   bool get iOwe => FirebaseAuth.instance.currentUser!.uid != payTo;
 
   Debt({
@@ -22,20 +20,17 @@ class Debt {
     required this.payTo,
     required this.groupID,
     required this.status,
+    required this.expenseID,
     this.paymentDate,
   });
 
   factory Debt.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+    final data = doc.data()! as Map<String, dynamic>;
 
-    // Safely parse paymentDate only if it's a Timestamp
+    // safely parse paymentDate
     Timestamp? parsedDate;
-    final raw = data['paymentDate'];
-    if (raw is Timestamp) {
-      parsedDate = raw;
-    } else {
-      parsedDate = null;
-    }
+    final rawDate = data['paymentDate'];
+    if (rawDate is Timestamp) parsedDate = rawDate;
 
     return Debt(
       id: doc.id,
@@ -44,6 +39,7 @@ class Debt {
       payTo: data['payTo'] as String? ?? '',
       groupID: data['groupID'] as String? ?? '',
       status: data['status'] as String? ?? 'unpaid',
+      expenseID: data['expenseID'] as String? ?? '', // ← NEW!
       paymentDate: parsedDate,
     );
   }

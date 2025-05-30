@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -7,8 +8,6 @@ import '../services/payment_service.dart';
 
 class PaymentPage extends StatefulWidget {
   final Debt debt;
-
-  /// Now expects a Future-returning callback so we can await it
   final Future<void> Function(PaymentMethod) onSelected;
 
   const PaymentPage({Key? key, required this.debt, required this.onSelected})
@@ -53,7 +52,6 @@ class _PaymentPageState extends State<PaymentPage> {
             ),
           );
         }
-
         final methods = snap.data!;
 
         return Scaffold(
@@ -85,6 +83,8 @@ class _PaymentPageState extends State<PaymentPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 16),
+
+                // Header: amount + title
                 Row(
                   children: [
                     const Icon(Icons.swap_horiz, color: Colors.black54),
@@ -112,31 +112,60 @@ class _PaymentPageState extends State<PaymentPage> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                Text(
-                  'Review Transaction',
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  height: 100,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade200,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Center(
-                    child: Text(
-                      'Bill Split Detail',
-                      style: GoogleFonts.poppins(color: Colors.black54),
-                    ),
-                  ),
+
+                // —— New: show who you are paying to by username ——
+                FutureBuilder<DocumentSnapshot>(
+                  future:
+                      FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(widget.debt.payTo)
+                          .get(),
+                  builder: (context, userSnap) {
+                    Widget child;
+                    if (userSnap.connectionState != ConnectionState.done) {
+                      child = const SizedBox(
+                        height: 60,
+                        child: Center(child: CircularProgressIndicator()),
+                      );
+                    } else if (userSnap.hasError ||
+                        userSnap.data == null ||
+                        !userSnap.data!.exists) {
+                      child = Text(
+                        'Pay To: ${widget.debt.payTo}',
+                        style: GoogleFonts.poppins(fontSize: 14),
+                      );
+                    } else {
+                      final data =
+                          userSnap.data!.data() as Map<String, dynamic>;
+                      final name =
+                          (data['fullName'] as String?) ??
+                          data['email'] ??
+                          widget.debt.payTo;
+                      child = Text(
+                        'Pay To: $name',
+                        style: GoogleFonts.poppins(fontSize: 14),
+                      );
+                    }
+                    return Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade200,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: child,
+                    );
+                  },
                 ),
                 const SizedBox(height: 24),
+
                 Text(
                   'Payment Methods',
                   style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 8),
+
+                // List of payment methods
                 Expanded(
                   child: ListView.builder(
                     itemCount: methods.length,
@@ -193,6 +222,8 @@ class _PaymentPageState extends State<PaymentPage> {
               ],
             ),
           ),
+
+          // Bottom Pay button
           bottomNavigationBar: Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
             child: ElevatedButton(
@@ -217,9 +248,7 @@ class _PaymentPageState extends State<PaymentPage> {
                         width: 24,
                         height: 24,
                         child: CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.white,
-                          ),
+                          valueColor: AlwaysStoppedAnimation(Colors.white),
                           strokeWidth: 2,
                         ),
                       )
