@@ -51,7 +51,7 @@ class _HomePageState extends State<HomePage> {
         if (!_hasRunDebtTest) {
           _hasRunDebtTest = true;
           checkAndCreateDebts(
-            'E004',
+            'E003',
           ); // 🔁 Replace with your actual test expense ID
         }
 

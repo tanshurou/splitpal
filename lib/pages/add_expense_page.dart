@@ -8,15 +8,26 @@ import 'package:intl/intl.dart';
 import 'package:math_expressions/math_expressions.dart';
 
 // Shared method to generate the next expense ID
-Future<String> getNextExpenseId(String groupId) async {
+Future<String> getNextExpenseId() async {
   final snapshot =
       await FirebaseFirestore.instance
           .collection('expenses')
-          .where('groupId', isEqualTo: groupId)
+          .orderBy(FieldPath.documentId)
           .get();
 
-  final count = snapshot.docs.length + 1;
-  return 'E${count.toString().padLeft(3, '0')}';
+  int maxId = 0;
+
+  for (var doc in snapshot.docs) {
+    final id = doc.id;
+    if (id.startsWith('E')) {
+      final numPart = int.tryParse(id.substring(1));
+      if (numPart != null && numPart > maxId) {
+        maxId = numPart;
+      }
+    }
+  }
+
+  return 'E${(maxId + 1).toString().padLeft(3, '0')}';
 }
 
 class AddExpenseStep1Page extends StatefulWidget {
@@ -59,7 +70,7 @@ class _AddExpenseStep1PageState extends State<AddExpenseStep1Page> {
       return;
     }
 
-    final expenseId = await getNextExpenseId(_selectedGroupId!);
+    final expenseId = await getNextExpenseId();
 
     final newExpenseRef = FirebaseFirestore.instance
         .collection('expenses')
@@ -782,7 +793,7 @@ class ConfirmExpensePage extends StatelessWidget {
     final activityId = 'A${DateTime.now().millisecondsSinceEpoch}';
 
     await FirebaseFirestore.instance
-        .collection('groups')
+        .collection('group')
         .doc(groupId)
         .collection('activityLog')
         .doc(activityId)

@@ -1,4 +1,6 @@
+import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:math_expressions/math_expressions.dart';
 
 Future<void> checkAndCreateDebts(String expenseId) async {
   final expenseRef = FirebaseFirestore.instance
@@ -20,7 +22,7 @@ Future<void> checkAndCreateDebts(String expenseId) async {
   final amount = data['amount']?.toDouble() ?? 0;
   final Timestamp date = data['date'];
 
-  // ✅ Ensure all users approved
+  // Check if all approved
   final allApproved = approvalStatus.values.every(
     (status) => status == 'approved',
   );
@@ -33,7 +35,7 @@ Future<void> checkAndCreateDebts(String expenseId) async {
     final isPayer = uid == paidBy;
 
     if (!isPayer) {
-      // 📜 Log activity for debtor
+      // Debtor activity
       final activityRef =
           FirebaseFirestore.instance
               .collection('users')
@@ -42,15 +44,15 @@ Future<void> checkAndCreateDebts(String expenseId) async {
               .doc();
 
       batch.set(activityRef, {
-        'action': 'owe',
+        'action': 'unpaid',
         'amount': debtAmount,
         'category': 'owe',
         'date': date,
         'group': groupId,
-        'userID': uid,
+        'userID': paidBy,
       });
 
-      // 🧾 Add debt document
+      // Create debt document for debtor
       final debtRef =
           FirebaseFirestore.instance
               .collection('users')
@@ -62,13 +64,13 @@ Future<void> checkAndCreateDebts(String expenseId) async {
         'amount': debtAmount,
         'groupID': groupId,
         'payTo': paidBy,
-        'paymentDate': null,
+        'paymentDate': date,
         'paymentMethod': 'card',
         'status': 'unpaid',
         'title': title,
+        'expenseID': expenseId,
       });
 
-      // 🔢 Update userSummary for debtor
       final userSummaryRef = FirebaseFirestore.instance
           .collection('users')
           .doc(uid)
@@ -80,7 +82,6 @@ Future<void> checkAndCreateDebts(String expenseId) async {
       }, SetOptions(merge: true));
     }
 
-    // 💸 Log activity for payer (once per debtor)
     if (!isPayer) {
       final payerActivityRef =
           FirebaseFirestore.instance
@@ -90,12 +91,12 @@ Future<void> checkAndCreateDebts(String expenseId) async {
               .doc();
 
       batch.set(payerActivityRef, {
-        'action': 'paid',
+        'action': 'unpaid',
         'amount': debtAmount,
-        'category': 'owe',
+        'category': 'owed',
         'date': date,
         'group': groupId,
-        'userID': paidBy,
+        'userID': uid,
       });
 
       final payerSummaryRef = FirebaseFirestore.instance
@@ -110,7 +111,6 @@ Future<void> checkAndCreateDebts(String expenseId) async {
     }
   }
 
-  // 📊 Update group summary
   final groupSummaryRef = FirebaseFirestore.instance
       .collection('groups')
       .doc(groupId)
@@ -122,7 +122,7 @@ Future<void> checkAndCreateDebts(String expenseId) async {
     'unsettledDebts': FieldValue.increment(splitAmong.length - 1),
   }, SetOptions(merge: true));
 
-  // ✅ Prevent future duplication
+  // Update approvalStatus to prevent duplicate creation
   batch.update(expenseRef, {
     'approvalStatus': {
       for (var uid in approvalStatus.keys) uid: 'debt_created',
