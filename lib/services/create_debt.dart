@@ -109,6 +109,15 @@ Future<void> checkAndCreateDebts(String expenseId) async {
         'owed': FieldValue.increment(debtAmount),
       }, SetOptions(merge: true));
     }
+
+    if (isPayer) {
+      final payerPaymentStatusRef =
+          FirebaseFirestore.instance.collection('expenses').doc(expenseId);
+
+      batch.update(payerPaymentStatusRef, {
+        'paymentStatus.$paidBy': 'paid',
+      });
+    }
   }
 
   final groupSummaryRef = FirebaseFirestore.instance

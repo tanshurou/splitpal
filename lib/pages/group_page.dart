@@ -23,16 +23,47 @@ class _GroupPageState extends State<GroupPage> {
     return snapshot.docs.isNotEmpty ? snapshot.docs.first.id : null;
   }
 
-  String _getStatusMessage(Map<String, dynamic> summary, String userId) {
-    final userOwes = summary['userOwes']?[userId] ?? 0;
-    final userOwed = summary['userOwed']?[userId] ?? 0;
+  Future<String> _getStatusMessage(String userId, String groupId) async {
+    try {
+      final expenseSnapshot = await FirebaseFirestore.instance
+          .collection('expenses')
+          .where('groupId', isEqualTo: groupId)
+          .get();
 
-    if (userOwes == 0 && userOwed == 0) {
-      return "settled up";
-    } else if (userOwed > 0) {
-      return "you are owed RM${userOwed.toStringAsFixed(2)}";
-    } else {
-      return "you owe RM${userOwes.toStringAsFixed(2)}";
+      if (expenseSnapshot.docs.isEmpty) {
+        return "No expenses found";
+      }
+
+      double userOwes = 0;
+      double userOwed = 0;
+
+      for (var expenseDoc in expenseSnapshot.docs) {
+        final data = expenseDoc.data();
+        final paymentStatus = Map<String, dynamic>.from(data['paymentStatus'] ?? {});
+        final userAmounts = Map<String, dynamic>.from(data['userAmounts'] ?? {});
+
+        if (paymentStatus[userId] == 'unpaid') {
+          final amountOwed = userAmounts[userId] ?? 0.0;
+          userOwes += amountOwed;
+        }
+
+        for (var uid in userAmounts.keys) {
+          if (uid != userId && paymentStatus[uid] == 'unpaid') {
+            userOwed += userAmounts[uid] ?? 0.0;
+          }
+        }
+      }
+
+      if (userOwes == 0 && userOwed == 0) {
+        return "settled up";
+      } else if (userOwed > 0) {
+        return "you are owed RM${userOwed.toStringAsFixed(2)}";
+      } else {
+        return "you owe RM${userOwes.toStringAsFixed(2)}";
+      }
+    } catch (e) {
+      print("Error fetching group status: $e");
+      return "Error fetching data";
     }
   }
 
@@ -45,6 +76,7 @@ class _GroupPageState extends State<GroupPage> {
       future: _getCustomUserId(currentUser.email!),
       builder: (context, userSnapshot) {
         if (!userSnapshot.hasData) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+
         final userId = userSnapshot.data!;
 
         return Scaffold(
@@ -104,18 +136,12 @@ class _GroupPageState extends State<GroupPage> {
                         final groupIcon = data['icon'] ?? '👥';
                         final groupId = doc.id;
 
-                        return FutureBuilder<DocumentSnapshot>(
-                          future: FirebaseFirestore.instance
-                              .collection('group')
-                              .doc(groupId)
-                              .collection('groupSummary')
-                              .doc('groupSummary')
-                              .get(),
-                          builder: (context, summarySnapshot) {
+                        return FutureBuilder<String>(
+                          future: _getStatusMessage(userId, groupId), 
+                          builder: (context, statusSnapshot) {
                             String status = "Loading...";
-                            if (summarySnapshot.hasData && summarySnapshot.data!.exists) {
-                              final summary = summarySnapshot.data!.data() as Map<String, dynamic>;
-                              status = _getStatusMessage(summary, userId);
+                            if (statusSnapshot.hasData) {
+                              status = statusSnapshot.data!;
                             }
 
                             return Card(

@@ -5,7 +5,6 @@ import 'package:splitpal/pages/landing_page.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  //debugPaintSizeEnabled = true;
   runApp(const MyApp());
 }
 

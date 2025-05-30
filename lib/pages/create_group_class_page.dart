@@ -86,7 +86,7 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
     final currentUserId = snapshot.docs.first.id;
     final memberList = {currentUserId, ..._selectedUserIds}.toList();
 
-    final groupId = await _getNextGroupId(); // G006, G007, etc.
+    final groupId = await _getNextGroupId();
     await FirebaseFirestore.instance.collection('group').doc(groupId).set({
       'name': groupName,
       'createdBy': currentUserId,
