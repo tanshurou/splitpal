@@ -20,7 +20,6 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
-  bool _hasRunDebtTest = false; // prevent multiple calls
 
   void navigateBottomBar(int index) {
     setState(() {
@@ -46,14 +45,6 @@ class _HomePageState extends State<HomePage> {
         }
 
         final userId = snapshot.data!;
-
-        // ✅ Run debt creation test once after userId is loaded
-        if (!_hasRunDebtTest) {
-          _hasRunDebtTest = true;
-          checkAndCreateDebts(
-            'E003',
-          ); // 🔁 Replace with your actual test expense ID
-        }
 
         final pages = [
           PersonalDashboardPage(),
