@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:splitpal/pages/group_page.dart';
+import 'package:splitpal/services/create_debt.dart';
 import 'package:splitpal/services/getUserID.dart';
 import 'package:splitpal/widgets/bottom_nav_bar.dart';
 import 'package:splitpal/pages/group_dashboard_page.dart';
@@ -19,6 +20,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
+  bool _hasRunDebtTest = false; // prevent multiple calls
 
   void navigateBottomBar(int index) {
     setState(() {
@@ -44,6 +46,15 @@ class _HomePageState extends State<HomePage> {
         }
 
         final userId = snapshot.data!;
+
+        // ✅ Run debt creation test once after userId is loaded
+        if (!_hasRunDebtTest) {
+          _hasRunDebtTest = true;
+          checkAndCreateDebts(
+            'E004',
+          ); // 🔁 Replace with your actual test expense ID
+        }
+
         final pages = [
           PersonalDashboardPage(),
           GroupPage(),
