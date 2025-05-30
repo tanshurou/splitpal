@@ -10,29 +10,20 @@ import 'payment_page.dart';
 
 class SettleDebtPage extends StatefulWidget {
   const SettleDebtPage({Key? key}) : super(key: key);
+
   @override
-  _SettleDebtPageState createState() => _SettleDebtPageState();
+  State<SettleDebtPage> createState() => _SettleDebtPageState();
 }
 
 class _SettleDebtPageState extends State<SettleDebtPage> {
-  final _service = DebtService();
+  final _debtSvc = DebtService();
   final _currencySvc = CurrencyService.instance;
-  late Future<List<Debt>> _debtsFuture;
 
   @override
   void initState() {
     super.initState();
-    // load user’s currency preference first
-    _currencySvc.loadCurrency().then((_) {
-      setState(() {}); // force a rebuild to pick up new symbol/rate
-    });
-    _debtsFuture = _service.fetchDebts();
-  }
-
-  Future<void> _refresh() async {
-    final next = _service.fetchDebts();
-    setState(() => _debtsFuture = next);
-    await next;
+    // load the user's currency
+    _currencySvc.loadCurrency().then((_) => setState(() {}));
   }
 
   void _onPay(Debt debt) {
@@ -43,7 +34,7 @@ class _SettleDebtPageState extends State<SettleDebtPage> {
             (_) => PaymentPage(
               debt: debt,
               onSelected: (method) async {
-                await _service.settleDebt(debt);
+                await _debtSvc.settleDebt(debt);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
@@ -53,7 +44,7 @@ class _SettleDebtPageState extends State<SettleDebtPage> {
                   ),
                 );
                 Navigator.pop(context);
-                await _refresh();
+                // no manual refresh needed—stream will update automatically
               },
             ),
       ),
@@ -67,67 +58,45 @@ class _SettleDebtPageState extends State<SettleDebtPage> {
         title: const Text('Settle Debt'),
         leading: const BackButton(),
       ),
-      body: FutureBuilder<List<Debt>>(
-        future: _debtsFuture,
-        builder: (ctx, snapshot) {
-          // Loading
-          if (snapshot.connectionState != ConnectionState.done) {
+      body: StreamBuilder<List<Debt>>(
+        stream: _debtSvc.streamDebts(),
+        builder: (ctx, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          // Error
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
+          if (snap.hasError) {
+            return Center(child: Text('Error: ${snap.error}'));
           }
-          final debts = snapshot.data ?? [];
-          // Empty
+          final debts = snap.data ?? [];
           if (debts.isEmpty) {
-            return RefreshIndicator(
-              onRefresh: _refresh,
-              child: ListView(
-                children: const [
-                  SizedBox(height: 200),
-                  Center(
-                    child: Text(
-                      'All caught up!',
-                      style: TextStyle(fontSize: 18),
-                    ),
-                  ),
-                ],
-              ),
+            return const Center(
+              child: Text('All caught up!', style: TextStyle(fontSize: 18)),
             );
           }
-          // List
-          return RefreshIndicator(
-            onRefresh: _refresh,
-            child: ListView.builder(
-              itemCount: debts.length,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemBuilder: (ctx, i) {
-                final d = debts[i];
-                return Card(
-                  margin: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
+          return ListView.builder(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            itemCount: debts.length,
+            itemBuilder: (ctx, i) {
+              final d = debts[i];
+              return Card(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                color: d.iOwe ? Colors.red[50] : Colors.green[50],
+                child: ListTile(
+                  title: Text(
+                    d.title,
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
                   ),
-                  color: d.iOwe ? Colors.red[50] : Colors.green[50],
-                  child: ListTile(
-                    title: Text(
-                      d.title,
-                      style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
-                    ),
-                    subtitle: Text(
-                      // ← show converted amount
-                      _currencySvc.symbolFor(d.amount),
-                      style: GoogleFonts.poppins(),
-                    ),
-                    trailing: ElevatedButton(
-                      onPressed: () => _onPay(d),
-                      child: const Text('Pay Now'),
-                    ),
+                  subtitle: Text(
+                    _currencySvc.symbolFor(d.amount),
+                    style: GoogleFonts.poppins(),
                   ),
-                );
-              },
-            ),
+                  trailing: ElevatedButton(
+                    onPressed: () => _onPay(d),
+                    child: const Text('Pay Now'),
+                  ),
+                ),
+              );
+            },
           );
         },
       ),
