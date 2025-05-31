@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:math_expressions/math_expressions.dart';
+import 'package:splitpal/models/user.dart';
 
 // Shared method to generate the next expense ID
 Future<String> getNextExpenseId() async {
@@ -525,8 +526,17 @@ class _AddExpenseStep3PageState extends State<AddExpenseStep3Page> {
     Map<String, dynamic> userAmounts = {};
     List<Map<String, dynamic>> selectedMembers = [];
 
+    // Fetch the paidBy ID from the expense document
+    final expenseDoc =
+        await FirebaseFirestore.instance
+            .collection('expenses')
+            .doc(widget.expenseId)
+            .get();
+
+    final paidById = expenseDoc['paidBy'];
+
     for (var uid in splitAmong) {
-      paymentStatus[uid] = 'unpaid';
+      paymentStatus[uid] = (uid == paidById) ? 'paid' : 'unpaid';
       approvalStatus[uid] = 'pending';
     }
 
@@ -563,12 +573,6 @@ class _AddExpenseStep3PageState extends State<AddExpenseStep3Page> {
         selectedMembers.add(member);
       }
     }
-
-    final expenseDoc =
-        await FirebaseFirestore.instance
-            .collection('expenses')
-            .doc(widget.expenseId)
-            .get();
 
     final title = expenseDoc['title'] ?? '';
     final receiptUrl = expenseDoc['receiptURL'] ?? '';
@@ -767,8 +771,6 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
   }
 }
 
-// Keep your CalculatorScreen and AddExpenseStep3Page definitions above...
-
 class ConfirmExpensePage extends StatelessWidget {
   final String userId, groupId, expenseId, title, receiptUrl;
   final double totalAmount;
@@ -828,59 +830,85 @@ class ConfirmExpensePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final userIds = selectedMembers.map((e) => e['uid'] as String).toList();
+
     return Scaffold(
       appBar: AppBar(title: const Text('Confirm Expense')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text("Title: $title", style: const TextStyle(fontSize: 16)),
-            const SizedBox(height: 8),
-            Text("Total Amount: RM${totalAmount.toStringAsFixed(2)}"),
-            const SizedBox(height: 8),
-            Text("Created by: $userId"),
-            Text("Paid by: $userId"),
-            const SizedBox(height: 8),
-            if (receiptUrl.isNotEmpty)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("Receipt:"),
-                  const SizedBox(height: 8),
-                  Image.network(receiptUrl, height: 150),
-                ],
-              ),
-            const SizedBox(height: 16),
-            const Text("Members and Amounts:"),
-            Expanded(
-              child: ListView(
-                children:
-                    selectedMembers.map((member) {
-                      final uid = member['uid'];
-                      final name = member['name'];
-                      final amt =
+      body: FutureBuilder<Map<String, User>>(
+        future: fetchUsersByIds(userIds),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData)
+            return const Center(child: CircularProgressIndicator());
+          final users = snapshot.data!;
+
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text("Title: $title", style: const TextStyle(fontSize: 16)),
+                const SizedBox(height: 8),
+                Text("Total Amount: RM${totalAmount.toStringAsFixed(2)}"),
+                const SizedBox(height: 8),
+                Text("Paid by: ${users[userId]?.fullName ?? userId}"),
+                const SizedBox(height: 8),
+                if (receiptUrl.isNotEmpty)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text("Receipt:"),
+                      const SizedBox(height: 8),
+                      Image.network(receiptUrl, height: 150),
+                    ],
+                  ),
+                const SizedBox(height: 16),
+                const Text("Members and Amounts:"),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: userIds.length,
+                    itemBuilder: (context, index) {
+                      final uid = userIds[index];
+                      final user = users[uid];
+                      final amount =
                           userAmounts[uid]?.toStringAsFixed(2) ?? '0.00';
-                      return ListTile(
-                        title: Text(name),
-                        trailing: Text("RM$amt"),
+                      final approval = approvalStatus[uid] ?? 'pending';
+                      final payment = paymentStatus[uid] ?? 'unpaid';
+
+                      return Card(
+                        margin: const EdgeInsets.symmetric(vertical: 6),
+                        child: ListTile(
+                          title: Text(user?.fullName ?? uid),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text("Approval Status: $approval"),
+                              Text("Payment Status: $payment"),
+                              Text("Amount: RM$amount"),
+                            ],
+                          ),
+                        ),
                       );
-                    }).toList(),
-              ),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => _submitFinalData(context),
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size.fromHeight(50),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                    },
+                  ),
                 ),
-              ),
-              child: const Text("Send Request", style: TextStyle(fontSize: 16)),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () => _submitFinalData(context),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(50),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    "Send Request",
+                    style: TextStyle(fontSize: 16),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

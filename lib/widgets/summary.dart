@@ -27,140 +27,146 @@ class UserSummary extends StatelessWidget {
         final double owed = (data['owed'] ?? 0).toDouble();
         final double balance = owed - owe;
 
-        return Padding(
+        return SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Left side (text)
-              Expanded(
-                flex: 2,
-                child: Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "RM${balance.toStringAsFixed(0)}",
-                        style: const TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const Text("balance", style: TextStyle(fontSize: 14)),
-                      const SizedBox(height: 16),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isWide = constraints.maxWidth > 400;
 
-                      // Owe
-                      Row(
+              return Flex(
+                direction: isWide ? Axis.horizontal : Axis.vertical,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Text section
+                  Expanded(
+                    flex: 2,
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Container(
-                            width: 8,
-                            height: 8,
-                            margin: const EdgeInsets.only(right: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.pink[300],
-                              shape: BoxShape.circle,
+                          Text(
+                            "RM${balance.toStringAsFixed(0)}",
+                            style: const TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                          const Text("Owe", style: TextStyle(fontSize: 14)),
-                        ],
-                      ),
-                      Text(
-                        "RM${owe.toStringAsFixed(0)}",
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
+                          const Text("balance", style: TextStyle(fontSize: 14)),
+                          const SizedBox(height: 16),
 
-                      // Owed
-                      Row(
-                        children: [
-                          Container(
-                            width: 8,
-                            height: 8,
-                            margin: const EdgeInsets.only(right: 8),
-                            decoration: const BoxDecoration(
-                              color: Color.fromARGB(255, 172, 233, 102),
-                              shape: BoxShape.circle,
+                          // Owe
+                          Row(
+                            children: [
+                              Container(
+                                width: 8,
+                                height: 8,
+                                margin: const EdgeInsets.only(right: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.pink[300],
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const Text("Owe", style: TextStyle(fontSize: 14)),
+                            ],
+                          ),
+                          Text(
+                            "RM${owe.toStringAsFixed(0)}",
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                          const Text("Owed", style: TextStyle(fontSize: 14)),
-                        ],
-                      ),
-                      Text(
-                        "RM${owed.toStringAsFixed(0)}",
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+                          const SizedBox(height: 12),
 
-              // Right side (pie chart)
-              Flexible(
-                flex: 1,
-                child: Padding(
-                  padding: const EdgeInsets.only(
-                    top: 48,
-                    right: 16,
-                  ), // Adjusted padding
-                  child: SizedBox(
-                    width: 100,
-                    height: 100,
-                    child: PieChart(
-                      PieChartData(
-                        sections:
-                            (owe == 0 && owed == 0)
-                                ? [
-                                  PieChartSectionData(
-                                    color: const Color.fromARGB(
-                                      255,
-                                      179,
-                                      179,
-                                      179,
-                                    ),
-                                    value: 1,
-                                    radius: 30,
-                                    title: '',
-                                  ),
-                                ]
-                                : [
-                                  PieChartSectionData(
-                                    color: const Color.fromARGB(
-                                      255,
-                                      255,
-                                      136,
-                                      176,
-                                    ),
-                                    value: owe,
-                                    radius: 30,
-                                    title: '',
-                                  ),
-                                  PieChartSectionData(
-                                    color: const Color.fromARGB(
-                                      255,
-                                      214,
-                                      248,
-                                      129,
-                                    ),
-                                    value: owed,
-                                    radius: 30,
-                                    title: '',
-                                  ),
-                                ],
-                        centerSpaceRadius: 30,
-                        sectionsSpace: 4,
+                          // Owed
+                          Row(
+                            children: [
+                              Container(
+                                width: 8,
+                                height: 8,
+                                margin: const EdgeInsets.only(right: 8),
+                                decoration: const BoxDecoration(
+                                  color: Color.fromARGB(255, 172, 233, 102),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const Text(
+                                "Owed",
+                                style: TextStyle(fontSize: 14),
+                              ),
+                            ],
+                          ),
+                          Text(
+                            "RM${owed.toStringAsFixed(0)}",
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                ),
-              ),
-            ],
+
+                  // Pie chart section
+                  Expanded(
+                    flex: 1,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 24, right: 16),
+                      child: AspectRatio(
+                        aspectRatio: 1,
+                        child: PieChart(
+                          PieChartData(
+                            sections:
+                                (owe == 0 && owed == 0)
+                                    ? [
+                                      PieChartSectionData(
+                                        color: const Color.fromARGB(
+                                          255,
+                                          179,
+                                          179,
+                                          179,
+                                        ),
+                                        value: 1,
+                                        radius: 30,
+                                        title: '',
+                                      ),
+                                    ]
+                                    : [
+                                      PieChartSectionData(
+                                        color: const Color.fromARGB(
+                                          255,
+                                          255,
+                                          136,
+                                          176,
+                                        ),
+                                        value: owe,
+                                        radius: 30,
+                                        title: '',
+                                      ),
+                                      PieChartSectionData(
+                                        color: const Color.fromARGB(
+                                          255,
+                                          214,
+                                          248,
+                                          129,
+                                        ),
+                                        value: owed,
+                                        radius: 30,
+                                        title: '',
+                                      ),
+                                    ],
+                            centerSpaceRadius: 30,
+                            sectionsSpace: 4,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         );
       },

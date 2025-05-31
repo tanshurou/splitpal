@@ -40,7 +40,7 @@ class ActivityTile extends StatelessWidget {
     } else if (category == 'owed') {
       return action == 'paid'
           ? '$name paid you $rm in $groupName'
-          : '$name owe you $rm in $groupName';
+          : '$name owes you $rm in $groupName';
     } else {
       return '$name $action $rm in $groupName';
     }
@@ -74,11 +74,11 @@ class ActivityTile extends StatelessWidget {
         switch (activity.action) {
           case 'paid':
             icon = Icons.attach_money;
-            color = Colors.green;
+            color = const Color.fromARGB(255, 168, 229, 106);
             break;
-          case 'owes':
+          case 'unpaid':
             icon = Icons.receipt_long;
-            color = Colors.orange;
+            color = const Color.fromARGB(255, 255, 136, 176);
             break;
           default:
             icon = Icons.info_outline;

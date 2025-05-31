@@ -91,24 +91,23 @@ class DebtService {
       {'owed': FieldValue.increment(-debt.amount)},
     );
 
-    // 4) Update group summary
-    batch.update(
-      _db
-          .collection('group')
-          .doc(debt.groupID)
-          .collection('groupSummary')
-          .doc('groupSummary'),
-      {
-        'settleDebts': FieldValue.increment(1),
-        'unsettledDebts': FieldValue.increment(-1),
-      },
-    );
-
     // 5) Mark this user as paid in the master expense doc
     batch.update(_db.collection('expenses').doc(debt.expenseID), {
       'paymentStatus.$meId': 'paid',
     });
 
+    // 6) Log payment in activity log
+    final activityRef =
+        _db.collection('users').doc(meId).collection('activityLog').doc();
+    batch.set(activityRef, {
+      'action': 'paid',
+      'amount': debt.amount,
+      'category': 'owe',
+      'date': FieldValue.serverTimestamp(),
+      'group': debt.groupID,
+      'userID': debt.payTo,
+      'expenseID': debt.expenseID,
+    });
     // Commit all at once
     await batch.commit();
   }
