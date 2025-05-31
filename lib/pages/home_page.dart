@@ -47,7 +47,6 @@ class _HomePageState extends State<HomePage> {
           PersonalDashboardPage(),
           GroupPage(),
           HistoryPage(userId: userId),
-          SettleDebtPage(),
           const ProfilePage(),
         ];
 

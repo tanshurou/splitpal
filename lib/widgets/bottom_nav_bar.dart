@@ -3,11 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:google_nav_bar/google_nav_bar.dart';
 
 class BottomNavBar extends StatelessWidget {
-  final int selectedIndex; // ← new
+  final int selectedIndex;
   final ValueChanged<int> onTabChange;
+
   const BottomNavBar({
     super.key,
-    required this.selectedIndex, // ← new
+    required this.selectedIndex,
     required this.onTabChange,
   });
 
@@ -27,8 +28,8 @@ class BottomNavBar extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(8.0),
         child: GNav(
-          selectedIndex: selectedIndex, // ← wire it up
-          onTabChange: onTabChange, // ← hook back to parent
+          selectedIndex: selectedIndex,
+          onTabChange: onTabChange,
           color: Colors.grey[300],
           activeColor: Colors.pink[300],
           tabBackgroundColor: Colors.pink.shade50,
@@ -42,8 +43,6 @@ class BottomNavBar extends StatelessWidget {
             GButton(icon: Icons.home_filled, text: 'Home'),
             GButton(icon: Icons.group, text: 'Group'),
             GButton(icon: Icons.history_rounded, text: 'History'),
-
-            GButton(icon: Icons.attach_money_rounded, text: 'Settle'),
             GButton(icon: Icons.person_outline, text: 'Profile'),
           ],
         ),

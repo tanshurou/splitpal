@@ -10,13 +10,11 @@ Future<void> checkAndCreateDebts(String expenseId) async {
 
   final data = expenseSnapshot.data()!;
   final approvalStatus = Map<String, dynamic>.from(data['approvalStatus']);
-  final paymentStatus = Map<String, dynamic>.from(data['paymentStatus']);
   final userAmounts = Map<String, dynamic>.from(data['userAmounts']);
   final splitAmong = List<String>.from(data['splitAmong']);
   final paidBy = data['paidBy'];
   final groupId = data['groupId'];
   final title = data['title'];
-  final amount = data['amount']?.toDouble() ?? 0;
   final Timestamp date = data['date'];
 
   // Check if all are approved
@@ -27,6 +25,7 @@ Future<void> checkAndCreateDebts(String expenseId) async {
 
   final batch = FirebaseFirestore.instance.batch();
 
+  // Does not create debt for payer
   for (final uid in splitAmong) {
     final debtAmount = (userAmounts[uid] ?? 0).toDouble();
     final isPayer = uid == paidBy;

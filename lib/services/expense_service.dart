@@ -34,7 +34,7 @@ class ExpenseService {
     // Save the expense document
     await _db.collection('expenses').doc(expenseId).set({
       ...expense.toMap(),
-      'expenseId': expenseId, // Optional: for easy reverse lookup
+      'expenseId': expenseId,
     });
 
     // Log the activity in the group's activity log
