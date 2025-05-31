@@ -3,10 +3,12 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:splitpal/pages/add_friend_page.dart';
-import 'package:splitpal/pages/banking_details_page.dart';
-import 'package:splitpal/pages/currency_settings_page.dart';
-import 'package:splitpal/pages/notification_settings_page.dart';
+
+import 'add_friend_page.dart';
+import 'banking_details_page.dart';
+import 'currency_settings_page.dart';
+import 'notification_settings_page.dart';
+import 'landing_page.dart'; // ← for logout navigation
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
@@ -24,7 +26,7 @@ class ProfilePage extends StatelessWidget {
       backgroundColor: bgColor,
       body: Column(
         children: [
-          // HEADER
+          // ─── HEADER ─────────────────────────────
           Container(
             width: double.infinity,
             padding: const EdgeInsets.only(top: 60, bottom: 40),
@@ -56,7 +58,7 @@ class ProfilePage extends StatelessWidget {
             ),
           ),
 
-          // MENU (Manage Account removed)
+          // ─── MENU ───────────────────────────────
           Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
@@ -112,6 +114,21 @@ class ProfilePage extends StatelessWidget {
                             builder: (_) => const BankingDetailsPage(),
                           ),
                         ),
+                  ),
+
+                  // ─── LOGOUT ─────────────────────────
+                  const SizedBox(height: 24),
+                  _ProfileTile(
+                    icon: Icons.logout,
+                    label: 'Logout',
+                    iconColor: Colors.redAccent,
+                    onTap: () async {
+                      await FirebaseAuth.instance.signOut();
+                      Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(builder: (_) => const LandingPage()),
+                        (route) => false,
+                      );
+                    },
                   ),
                 ],
               ),
