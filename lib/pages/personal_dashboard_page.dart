@@ -32,6 +32,8 @@ class _PersonalDashboardPageState extends State<PersonalDashboardPage> {
       final resolvedId = await getUserIdByEmail(user.email!);
       if (mounted) {
         setState(() => userId = resolvedId);
+        print("Auth email: ${user.email}");
+        print("Resolved userId: $userId");
       }
     }
   }
@@ -128,7 +130,7 @@ class _PersonalDashboardPageState extends State<PersonalDashboardPage> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Pie Chart Summary with shadow
+                  // Pie Chart Summary with Firestore data
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
@@ -142,17 +144,50 @@ class _PersonalDashboardPageState extends State<PersonalDashboardPage> {
                       ],
                     ),
                     padding: const EdgeInsets.all(12),
-                    child: UserSummary(userId: userId!),
+                    child: StreamBuilder<DocumentSnapshot>(
+                      stream:
+                          FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(userId)
+                              .collection('userSummary')
+                              .doc('userSummary')
+                              .snapshots(),
+                      builder: (context, summarySnapshot) {
+                        if (summarySnapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
+                        }
+
+                        if (!summarySnapshot.hasData ||
+                            !summarySnapshot.data!.exists) {
+                          return const Center(
+                            child: Text('No summary data found'),
+                          );
+                        }
+
+                        final summaryData =
+                            summarySnapshot.data!.data()
+                                as Map<String, dynamic>? ??
+                            {};
+
+                        final double owe = _toDouble(summaryData['owe']);
+                        final double owed = _toDouble(summaryData['owed']);
+
+                        return UserSummaryWidget(owe: owe, owed: owed);
+                      },
+                    ),
                   ),
 
                   const SizedBox(height: 24),
 
-                  // Owe / Owed Toggle with contrast + animation + shadow
+                  // Owe / Owed Toggle
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 250),
                     curve: Curves.easeInOut,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFF5F8), // very light pink
+                      color: const Color(0xFFFFF5F8),
                       borderRadius: BorderRadius.circular(30),
                       boxShadow: [
                         BoxShadow(
@@ -183,7 +218,6 @@ class _PersonalDashboardPageState extends State<PersonalDashboardPage> {
                                           ],
                                         )
                                         : null,
-                                color: showOwe ? null : Colors.transparent,
                               ),
                               alignment: Alignment.center,
                               child: Text(
@@ -217,7 +251,6 @@ class _PersonalDashboardPageState extends State<PersonalDashboardPage> {
                                           ],
                                         )
                                         : null,
-                                color: !showOwe ? null : Colors.transparent,
                               ),
                               alignment: Alignment.center,
                               child: Text(
@@ -239,7 +272,7 @@ class _PersonalDashboardPageState extends State<PersonalDashboardPage> {
 
                   const SizedBox(height: 16),
 
-                  // Activity list
+                  // Activity List
                   Expanded(
                     child: StreamBuilder<List<Activity>>(
                       stream: userActivityStream(userId!),
@@ -282,5 +315,13 @@ class _PersonalDashboardPageState extends State<PersonalDashboardPage> {
         );
       },
     );
+  }
+
+  double _toDouble(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
   }
 }

@@ -6,30 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:math_expressions/math_expressions.dart';
+import 'package:splitpal/models/expense.dart';
 import 'package:splitpal/models/user.dart';
-
-// Shared method to generate the next expense ID
-Future<String> getNextExpenseId() async {
-  final snapshot =
-      await FirebaseFirestore.instance
-          .collection('expenses')
-          .orderBy(FieldPath.documentId)
-          .get();
-
-  int maxId = 0;
-
-  for (var doc in snapshot.docs) {
-    final id = doc.id;
-    if (id.startsWith('E')) {
-      final numPart = int.tryParse(id.substring(1));
-      if (numPart != null && numPart > maxId) {
-        maxId = numPart;
-      }
-    }
-  }
-
-  return 'E${(maxId + 1).toString().padLeft(3, '0')}';
-}
+import 'package:splitpal/services/expense_service.dart';
 
 class AddExpenseStep1Page extends StatefulWidget {
   final String userId;
@@ -71,24 +50,13 @@ class _AddExpenseStep1PageState extends State<AddExpenseStep1Page> {
       return;
     }
 
-    final expenseId = await getNextExpenseId();
-
-    final newExpenseRef = FirebaseFirestore.instance
-        .collection('expenses')
-        .doc(expenseId);
-
-    await newExpenseRef.set({
+    final expenseData = {
       'title': _titleController.text.trim(),
-      'date': Timestamp.fromDate(_selectedDate),
+      'date': _selectedDate,
       'createdBy': widget.userId,
       'paidBy': _selectedPayerId,
       'groupId': _selectedGroupId,
-      'receiptURL': '',
-      'amount': 0,
-      'splitAmong': [],
-      'approvalStatus': {},
-      'paymentStatus': {},
-    });
+    };
 
     Navigator.push(
       context,
@@ -96,8 +64,8 @@ class _AddExpenseStep1PageState extends State<AddExpenseStep1Page> {
         builder:
             (_) => AddExpenseStep2Page(
               groupId: _selectedGroupId!,
-              expenseId: expenseId,
               userId: widget.userId,
+              expenseData: expenseData,
             ),
       ),
     );
@@ -253,14 +221,14 @@ class _AddExpenseStep1PageState extends State<AddExpenseStep1Page> {
 
 class AddExpenseStep2Page extends StatefulWidget {
   final String groupId;
-  final String expenseId;
   final String userId;
+  final Map<String, dynamic> expenseData;
 
   const AddExpenseStep2Page({
     super.key,
     required this.groupId,
-    required this.expenseId,
     required this.userId,
+    required this.expenseData,
   });
 
   @override
@@ -284,14 +252,17 @@ class _AddExpenseStep2PageState extends State<AddExpenseStep2Page> {
   }
 
   void _continueToNextStep() {
+    final updatedExpenseData = Map<String, dynamic>.from(widget.expenseData);
+    updatedExpenseData['receiptURL'] = _imageFile?.path ?? '';
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder:
             (_) => AddExpenseStep3Page(
               groupId: widget.groupId,
-              expenseId: widget.expenseId,
               userId: widget.userId,
+              expenseData: updatedExpenseData,
             ),
       ),
     );
@@ -318,7 +289,6 @@ class _AddExpenseStep2PageState extends State<AddExpenseStep2Page> {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 20),
-
             GestureDetector(
               onTap: _takePhoto,
               child: Container(
@@ -338,9 +308,7 @@ class _AddExpenseStep2PageState extends State<AddExpenseStep2Page> {
                         ),
               ),
             ),
-
             const SizedBox(height: 30),
-
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -366,14 +334,14 @@ enum SplitMethod { equally, percentage, custom }
 
 class AddExpenseStep3Page extends StatefulWidget {
   final String groupId;
-  final String expenseId;
   final String userId;
+  final Map<String, dynamic> expenseData;
 
   const AddExpenseStep3Page({
     super.key,
     required this.groupId,
-    required this.expenseId,
     required this.userId,
+    required this.expenseData,
   });
 
   @override
@@ -509,7 +477,7 @@ class _AddExpenseStep3PageState extends State<AddExpenseStep3Page> {
     return const SizedBox();
   }
 
-  Future<void> _splitAndSave() async {
+  Future<void> _prepareForConfirmation() async {
     if (_amountController.text.isEmpty || _selectedUserIds.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter amount and select members')),
@@ -526,14 +494,7 @@ class _AddExpenseStep3PageState extends State<AddExpenseStep3Page> {
     Map<String, dynamic> userAmounts = {};
     List<Map<String, dynamic>> selectedMembers = [];
 
-    // Fetch the paidBy ID from the expense document
-    final expenseDoc =
-        await FirebaseFirestore.instance
-            .collection('expenses')
-            .doc(widget.expenseId)
-            .get();
-
-    final paidById = expenseDoc['paidBy'];
+    final paidById = widget.expenseData['paidBy'];
 
     for (var uid in splitAmong) {
       paymentStatus[uid] = (uid == paidById) ? 'paid' : 'unpaid';
@@ -574,9 +535,6 @@ class _AddExpenseStep3PageState extends State<AddExpenseStep3Page> {
       }
     }
 
-    final title = expenseDoc['title'] ?? '';
-    final receiptUrl = expenseDoc['receiptURL'] ?? '';
-
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -584,14 +542,15 @@ class _AddExpenseStep3PageState extends State<AddExpenseStep3Page> {
             (_) => ConfirmExpensePage(
               userId: widget.userId,
               groupId: widget.groupId,
-              expenseId: widget.expenseId,
-              title: title,
-              receiptUrl: receiptUrl,
+              title: widget.expenseData['title'],
+              receiptUrl: widget.expenseData['receiptUrl'] ?? '',
               totalAmount: _totalAmount,
               selectedMembers: selectedMembers,
               paymentStatus: paymentStatus,
               approvalStatus: approvalStatus,
               userAmounts: userAmounts,
+              paidBy: widget.expenseData['paidBy'],
+              date: widget.expenseData['date'],
             ),
       ),
     );
@@ -648,8 +607,8 @@ class _AddExpenseStep3PageState extends State<AddExpenseStep3Page> {
                       ),
                     ),
                     ElevatedButton(
-                      onPressed: _splitAndSave,
-                      child: const Text("Split and Review"),
+                      onPressed: _prepareForConfirmation,
+                      child: const Text("Next"),
                     ),
                   ],
                 ),
@@ -772,8 +731,9 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
 }
 
 class ConfirmExpensePage extends StatelessWidget {
-  final String userId, groupId, expenseId, title, receiptUrl;
+  final String userId, groupId, title, receiptUrl, paidBy;
   final double totalAmount;
+  final DateTime date;
   final List<Map<String, dynamic>> selectedMembers;
   final Map<String, dynamic> paymentStatus, approvalStatus, userAmounts;
 
@@ -781,7 +741,6 @@ class ConfirmExpensePage extends StatelessWidget {
     super.key,
     required this.userId,
     required this.groupId,
-    required this.expenseId,
     required this.title,
     required this.receiptUrl,
     required this.totalAmount,
@@ -789,40 +748,29 @@ class ConfirmExpensePage extends StatelessWidget {
     required this.paymentStatus,
     required this.approvalStatus,
     required this.userAmounts,
+    required this.paidBy,
+    required this.date,
   });
 
   Future<void> _submitFinalData(BuildContext context) async {
-    final activityId = 'A${DateTime.now().millisecondsSinceEpoch}';
+    final expense = Expense(
+      title: title,
+      amount: totalAmount,
+      createdBy: userId,
+      paidBy: paidBy,
+      date: date,
+      groupId: groupId,
+      receiptURL: receiptUrl,
+      splitAmong: selectedMembers.map((e) => e['uid'] as String).toList(),
+      approvalStatus: Map<String, String>.from(approvalStatus),
+      paymentStatus: Map<String, String>.from(paymentStatus),
+      userAmounts: Map<String, double>.from(userAmounts),
+    );
 
-    await FirebaseFirestore.instance
-        .collection('group')
-        .doc(groupId)
-        .collection('activityLog')
-        .doc(activityId)
-        .set({
-          'type': 'bill_split_request',
-          'expenseId': expenseId,
-          'title': title,
-          'createdBy': userId,
-          'timestamp': Timestamp.now(),
-          'amount': totalAmount,
-          'splitAmong': selectedMembers.map((e) => e['uid']).toList(),
-          'approvalStatus': approvalStatus,
-        });
-
-    await FirebaseFirestore.instance
-        .collection('expenses')
-        .doc(expenseId)
-        .update({
-          'amount': totalAmount,
-          'splitAmong': selectedMembers.map((e) => e['uid']).toList(),
-          'paymentStatus': paymentStatus,
-          'approvalStatus': approvalStatus,
-          'userAmounts': userAmounts,
-        });
+    final expenseService = ExpenseService();
+    await expenseService.saveExpense(expense: expense);
 
     Navigator.popUntil(context, (route) => route.isFirst);
-
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("Bill split request sent successfully")),
     );
@@ -837,8 +785,9 @@ class ConfirmExpensePage extends StatelessWidget {
       body: FutureBuilder<Map<String, User>>(
         future: fetchUsersByIds(userIds),
         builder: (context, snapshot) {
-          if (!snapshot.hasData)
+          if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
+          }
           final users = snapshot.data!;
 
           return Padding(
@@ -850,7 +799,7 @@ class ConfirmExpensePage extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text("Total Amount: RM${totalAmount.toStringAsFixed(2)}"),
                 const SizedBox(height: 8),
-                Text("Paid by: ${users[userId]?.fullName ?? userId}"),
+                Text("Paid by: ${users[paidBy]?.fullName ?? paidBy}"),
                 const SizedBox(height: 8),
                 if (receiptUrl.isNotEmpty)
                   Column(
