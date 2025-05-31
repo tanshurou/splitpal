@@ -43,8 +43,6 @@ class _LoginPageState extends State<LoginPage> {
         email: email,
         password: password,
       );
-
-      // Login success
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const HomePage()),
