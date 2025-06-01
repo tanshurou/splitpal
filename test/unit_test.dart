@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:splitpal/utils/get_expense_Id.dart'; // use your actual app name
+import 'package:splitpal/utils/get_expense_Id.dart';
 
 void main() {
   group('getNextExpenseIdFromDocs', () {
