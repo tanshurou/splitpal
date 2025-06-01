@@ -103,7 +103,7 @@ Future<void> checkAndCreateDebts(String expenseId) async {
   }
 
   final groupSummaryRef = FirebaseFirestore.instance
-      .collection('groups')
+      .collection('group')
       .doc(groupId)
       .collection('groupSummary')
       .doc('groupSummary');
