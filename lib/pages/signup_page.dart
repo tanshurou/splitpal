@@ -15,7 +15,8 @@ class _SignupPageState extends State<SignupPage> {
   final TextEditingController _fullNameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _confirmPasswordController = TextEditingController();
+  final TextEditingController _confirmPasswordController =
+      TextEditingController();
 
   bool _isLoading = false;
   bool _passwordsMismatch = false;
@@ -26,7 +27,8 @@ class _SignupPageState extends State<SignupPage> {
     final fullNameValid = _fullNameController.text.trim().isNotEmpty;
     final emailValid = _emailController.text.contains('@');
     final passwordValid = _passwordController.text.length >= 6;
-    final passwordsMatch = _passwordController.text == _confirmPasswordController.text;
+    final passwordsMatch =
+        _passwordController.text == _confirmPasswordController.text;
     return fullNameValid && emailValid && passwordValid && passwordsMatch;
   }
 
@@ -61,10 +63,13 @@ class _SignupPageState extends State<SignupPage> {
       );
 
       await cred.user?.updateDisplayName(fullName);
-      final counterRef = FirebaseFirestore.instance.collection('counters').doc('users');
+      final counterRef = FirebaseFirestore.instance
+          .collection('counters')
+          .doc('users');
       await FirebaseFirestore.instance.runTransaction((transaction) async {
         final counterSnap = await transaction.get(counterRef);
-        int lastId = counterSnap.exists ? (counterSnap.data()?['lastId'] ?? 0) : 0;
+        int lastId =
+            counterSnap.exists ? (counterSnap.data()?['lastId'] ?? 0) : 0;
         int newId = lastId + 1;
         String newUserId = 'U${newId.toString().padLeft(3, '0')}';
 
@@ -100,7 +105,9 @@ class _SignupPageState extends State<SignupPage> {
         message = 'Password is too weak.';
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     } finally {
       setState(() => _isLoading = false);
     }
@@ -147,7 +154,9 @@ class _SignupPageState extends State<SignupPage> {
                   border: const OutlineInputBorder(),
                   suffixIcon: IconButton(
                     icon: Icon(
-                      _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                      _obscurePassword
+                          ? Icons.visibility_off
+                          : Icons.visibility,
                     ),
                     onPressed: () {
                       setState(() {
@@ -160,7 +169,8 @@ class _SignupPageState extends State<SignupPage> {
                 onChanged: (_) {
                   setState(() {
                     _passwordsMismatch =
-                        _passwordController.text != _confirmPasswordController.text;
+                        _passwordController.text !=
+                        _confirmPasswordController.text;
                   });
                 },
               ),
@@ -175,7 +185,9 @@ class _SignupPageState extends State<SignupPage> {
                       border: const OutlineInputBorder(),
                       suffixIcon: IconButton(
                         icon: Icon(
-                          _obscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
+                          _obscureConfirmPassword
+                              ? Icons.visibility_off
+                              : Icons.visibility,
                         ),
                         onPressed: () {
                           setState(() {
@@ -188,7 +200,8 @@ class _SignupPageState extends State<SignupPage> {
                     onChanged: (_) {
                       setState(() {
                         _passwordsMismatch =
-                            _passwordController.text != _confirmPasswordController.text;
+                            _passwordController.text !=
+                            _confirmPasswordController.text;
                       });
                     },
                   ),
@@ -197,7 +210,10 @@ class _SignupPageState extends State<SignupPage> {
                       padding: EdgeInsets.only(top: 8.0),
                       child: Text(
                         'Passwords do not match',
-                        style: TextStyle(color: Colors.red, fontWeight: FontWeight.w500),
+                        style: TextStyle(
+                          color: Colors.red,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                 ],
@@ -206,12 +222,15 @@ class _SignupPageState extends State<SignupPage> {
               _isLoading
                   ? const CircularProgressIndicator()
                   : ElevatedButton(
-                      onPressed: _canSignUp ? _onSignUp : null,
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                        child: Text('Sign Up', style: TextStyle(fontSize: 16)),
+                    onPressed: _canSignUp ? _onSignUp : null,
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 32,
+                        vertical: 12,
                       ),
+                      child: Text('Sign Up', style: TextStyle(fontSize: 16)),
                     ),
+                  ),
               const SizedBox(height: 16),
               TextButton(
                 onPressed: () {

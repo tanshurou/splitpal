@@ -26,10 +26,12 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
-
+    
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = false     // ← Disable R8 / Proguard
+            isShrinkResources = false   // ← Optional: also disable resource shrinking
         }
     }
 }
