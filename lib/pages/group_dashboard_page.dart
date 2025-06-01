@@ -72,12 +72,14 @@ class _GroupDashboardPageState extends State<GroupDashboardPage> {
         print("User is not authenticated.");
         return;
       }
-
       await expenseRef.update({
         'approvalStatus.$currentUserId': 'approved',
       });
-
       checkAndCreateDebts(expenseId);
+      setState(() {
+        showSplit = true;
+      });
+
     } catch (e) {
       print("Error approving expense: $e");
     }
@@ -300,13 +302,15 @@ class _GroupDashboardPageState extends State<GroupDashboardPage> {
                 final filtered = docs.where((doc) {
                   final data = doc.data() as Map<String, dynamic>;
                   final approval = Map<String, dynamic>.from(data['approvalStatus'] ?? {});
-                  final userApproval = approval[currentUserId];
-                  final hasApproved = userApproval == 'approved' || userApproval == 'debt_created';
-                  return showSplit ? hasApproved : !hasApproved;
+                  final splitAmong = List<String>.from(data['splitAmong'] ?? []);
+                  final allApproved = splitAmong.every((uid) {
+                    final status = approval[uid] ?? 'pending';
+                    return status == 'approved' || status == 'debt created';
+                  });
+                  return showSplit ? allApproved : !allApproved;
                 }).toList();
 
                 if (filtered.isEmpty) return const Center(child: Text("No items to show"));
-
                 return ListView.builder(
                   padding: const EdgeInsets.all(16),
                   itemCount: filtered.length,
@@ -318,11 +322,12 @@ class _GroupDashboardPageState extends State<GroupDashboardPage> {
                     final approval = Map<String, dynamic>.from(data['approvalStatus'] ?? {});
                     final splitAmong = List<String>.from(data['splitAmong'] ?? []);
                     final paymentStatus = Map<String, dynamic>.from(data['paymentStatus'] ?? {});
-                    final approvedCount = splitAmong.where((uid) {
-                      final approvalStatus = approval[uid];
-                      final paidStatus = paymentStatus[uid];
-                      return approvalStatus == 'approved' || approvalStatus == 'debt_created' || paidStatus == 'paid';
-                    }).length;
+                    final approvedCount = showSplit
+                        ? splitAmong.where((uid) => paymentStatus[uid] == 'paid').length
+                        : splitAmong.where((uid) {
+                            final approvalStatus = approval[uid];
+                            return approvalStatus == 'approved' || approvalStatus == 'debt_created';
+                          }).length;
 
                     return GestureDetector(
                       onTap: () {
@@ -363,17 +368,25 @@ class _GroupDashboardPageState extends State<GroupDashboardPage> {
                                 valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF90EE90)),
                               ),
                               const SizedBox(height: 4),
-                              Text('$approvedCount / ${splitAmong.length} approved',
-                                  style: const TextStyle(fontSize: 12)),
+                              Text(showSplit
+                                  ? '$approvedCount / ${splitAmong.length} paid'
+                                  : '$approvedCount / ${splitAmong.length} approved',
+                                style: const TextStyle(fontSize: 12),
+                                ),
                               const SizedBox(height: 8),
                               ...splitAmong.map((uid) {
                                 final name = userNames[uid] ?? uid;
+                                String statusLabel;
+                                Color color;
                                 final approvalStatus = approval[uid] ?? 'pending';
-                                final paidStatus = paymentStatus[uid] ?? 'unpaid';
-                                final statusLabel = paidStatus == 'paid' ? 'paid' : approvalStatus;
-                                final color = statusLabel == 'approved' || statusLabel == 'debt_created' || statusLabel == 'paid'
-                                    ? const Color(0xFF90EE90)
-                                    : Colors.pink;
+                                if (showSplit) {
+                                  final paidStatus = paymentStatus[uid] ?? 'unpaid';
+                                  statusLabel = paidStatus == 'paid' ? 'paid' : 'unpaid';
+                                  color = statusLabel == 'paid' ? const Color(0xFF90EE90) : Colors.pink;
+                                } else {
+                                  statusLabel = approvalStatus == 'approved' ? 'approved' : 'pending';
+                                  color = statusLabel == 'approved' ? Colors.green : Colors.orange;
+                                }
                                 return Padding(
                                   padding: const EdgeInsets.symmetric(vertical: 2),
                                   child: Row(
