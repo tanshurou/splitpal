@@ -46,7 +46,7 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
   }
 
   Future<String> _getNextGroupId() async {
-    final counterRef = FirebaseFirestore.instance.collection('counters').doc('groups');
+    final counterRef = FirebaseFirestore.instance.collection('counters').doc('group');
     final snapshot = await counterRef.get();
 
     int next = 1;
