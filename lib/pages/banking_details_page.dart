@@ -2,18 +2,28 @@
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-
 import '../models/payment_method.dart';
 import '../services/payment_service.dart';
 
+/// BankingDetailsPage now accepts an optional `serviceOverride` for testing.
+///
+/// If `serviceOverride` is non‐null, _both_ fetch and delete/add calls will
+/// delegate to that object. Otherwise, it uses `PaymentService.instance`.
 class BankingDetailsPage extends StatefulWidget {
-  const BankingDetailsPage({Key? key}) : super(key: key);
+  /// If non‐null, this PaymentService will be used instead of the real singleton.
+  final PaymentService? serviceOverride;
+
+  const BankingDetailsPage({Key? key, this.serviceOverride}) : super(key: key);
 
   @override
   State<BankingDetailsPage> createState() => _BankingDetailsPageState();
 }
 
 class _BankingDetailsPageState extends State<BankingDetailsPage> {
+  /// Inside the state, always refer to `svc` instead of `PaymentService.instance`
+  /// directly. That way, if `widget.serviceOverride` is supplied, it will get used.
+  PaymentService get svc => widget.serviceOverride ?? PaymentService.instance;
+
   late Future<List<PaymentMethod>> _methodsFuture;
 
   @override
@@ -23,11 +33,12 @@ class _BankingDetailsPageState extends State<BankingDetailsPage> {
   }
 
   void _loadMethods() {
-    _methodsFuture = PaymentService.instance.fetchMethods();
+    // Use the override if provided, otherwise the real singleton
+    _methodsFuture = svc.fetchMethods();
   }
 
   Future<void> _deleteMethod(String id) async {
-    await PaymentService.instance.deleteMethod(id);
+    await svc.deleteMethod(id);
     _loadMethods();
     setState(() {});
   }
@@ -68,7 +79,7 @@ class _BankingDetailsPageState extends State<BankingDetailsPage> {
                   final n = name?.trim() ?? '';
                   final num = number?.trim() ?? '';
                   if (n.isNotEmpty && num.isNotEmpty) {
-                    PaymentService.instance.addMethod(n, num).then((_) {
+                    svc.addMethod(n, num).then((_) {
                       _loadMethods();
                       setState(() {});
                       Navigator.pop(ctx);
