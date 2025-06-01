@@ -64,64 +64,25 @@ class _GroupDashboardPageState extends State<GroupDashboardPage> {
     }
   }
 
-  Future<Map<String, double>> _calculateUserUnpaidAmounts() async {
-    final snapshot = await FirebaseFirestore.instance
-        .collection('expenses')
-        .where('groupId', isEqualTo: widget.groupId)
-        .get();
-
-    final Map<String, double> userTotals = {};
-
-    for (var doc in snapshot.docs) {
-      final data = doc.data();
-      final paymentStatus = Map<String, dynamic>.from(data['paymentStatus'] ?? {});
-      final userAmounts = Map<String, dynamic>.from(data['userAmounts'] ?? {});
-
-      for (var entry in paymentStatus.entries) {
-        if (entry.value == 'unpaid') {
-          final uid = entry.key;
-          final amount = (userAmounts[uid] ?? 0).toDouble();
-          userTotals[uid] = (userTotals[uid] ?? 0) + amount;
-        }
-      }
-    }
-
-    return userTotals;
-  }
-
-  // Function to approve an expense and update the approval status
   Future<void> _approveExpense(String expenseId) async {
     final expenseRef = FirebaseFirestore.instance.collection('expenses').doc(expenseId);
 
     try {
-      final expenseSnapshot = await expenseRef.get();
-      final expenseData = expenseSnapshot.data()!;
-      final paidBy = expenseData['paidBy'];
       if (currentUserId == null) {
         print("User is not authenticated.");
         return;
       }
+
       await expenseRef.update({
         'approvalStatus.$currentUserId': 'approved',
       });
 
-      if (currentUserId == paidBy) {
-        await expenseRef.update({
-          'paymentStatus.$currentUserId': 'paid',
-        });
-      }
-
       checkAndCreateDebts(expenseId);
-
-      setState(() {
-        // Refresh the data after approval
-      });
     } catch (e) {
       print("Error approving expense: $e");
     }
   }
 
-  // Function to handle leaving the group with confirmation
   Future<void> _leaveGroup() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -144,13 +105,13 @@ class _GroupDashboardPageState extends State<GroupDashboardPage> {
     if (confirmed == true) {
       final groupRef = FirebaseFirestore.instance.collection('group').doc(widget.groupId);
       await groupRef.update({
-        'members': FieldValue.arrayRemove([currentUserId]), // Remove the user from the group
+        'members': FieldValue.arrayRemove([currentUserId]),
       });
 
       setState(() {
-        groupMembers.remove(currentUserId); // Update the UI to reflect leaving the group
+        groupMembers.remove(currentUserId);
       });
-      Navigator.pop(context); // Close the page after leaving the group.
+      Navigator.pop(context);
     }
   }
 
@@ -178,19 +139,38 @@ class _GroupDashboardPageState extends State<GroupDashboardPage> {
         children: [
           Padding(
             padding: const EdgeInsets.all(16),
-            child: FutureBuilder<Map<String, double>>(
-              future: _calculateUserUnpaidAmounts(),
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('expenses')
+                  .where('groupId', isEqualTo: widget.groupId)
+                  .snapshots(),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) return const SizedBox(height: 180);
 
-                final data = snapshot.data!;
-                final totalOwed = data.values.fold(0.0, (a, b) => a + b);
-                final colors = [const Color(0xFF90EE90), const Color(0xFFFFC0CB)];
+                final docs = snapshot.data!.docs;
+                final Map<String, double> userTotals = {};
 
+                for (var doc in docs) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final paymentStatus = Map<String, dynamic>.from(data['paymentStatus'] ?? {});
+                  final userAmounts = Map<String, dynamic>.from(data['userAmounts'] ?? {});
+
+                  for (var entry in paymentStatus.entries) {
+                    final uid = entry.key;
+                    final status = entry.value;
+                    final amount = (userAmounts[uid] ?? 0).toDouble();
+                    if (status != 'paid') {
+                      userTotals[uid] = (userTotals[uid] ?? 0) + amount;
+                    }
+                  }
+                }
+
+                final totalOwed = userTotals.values.fold(0.0, (a, b) => a + b);
+                final colors = [const Color(0xFF90EE90), const Color(0xFFFFC0CB)];
                 final pieSections = <PieChartSectionData>[];
 
                 int colorIndex = 0;
-                for (var entry in data.entries) {
+                for (var entry in userTotals.entries) {
                   final uid = entry.key;
                   final name = userNames[uid] ?? uid;
                   final amount = entry.value;
@@ -247,7 +227,7 @@ class _GroupDashboardPageState extends State<GroupDashboardPage> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,  // Adjust to space out the buttons
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
                   child: GestureDetector(
@@ -321,10 +301,7 @@ class _GroupDashboardPageState extends State<GroupDashboardPage> {
                   final data = doc.data() as Map<String, dynamic>;
                   final approval = Map<String, dynamic>.from(data['approvalStatus'] ?? {});
                   final userApproval = approval[currentUserId];
-
-                  // Approving logic
                   final hasApproved = userApproval == 'approved' || userApproval == 'debt_created';
-
                   return showSplit ? hasApproved : !hasApproved;
                 }).toList();
 
@@ -340,9 +317,12 @@ class _GroupDashboardPageState extends State<GroupDashboardPage> {
                     final amount = data['amount'] ?? 0;
                     final approval = Map<String, dynamic>.from(data['approvalStatus'] ?? {});
                     final splitAmong = List<String>.from(data['splitAmong'] ?? []);
-                    final approvedCount = splitAmong
-                        .where((uid) => approval[uid] == 'approved' || approval[uid] == 'debt_created')
-                        .length;
+                    final paymentStatus = Map<String, dynamic>.from(data['paymentStatus'] ?? {});
+                    final approvedCount = splitAmong.where((uid) {
+                      final approvalStatus = approval[uid];
+                      final paidStatus = paymentStatus[uid];
+                      return approvalStatus == 'approved' || approvalStatus == 'debt_created' || paidStatus == 'paid';
+                    }).length;
 
                     return GestureDetector(
                       onTap: () {
@@ -388,8 +368,10 @@ class _GroupDashboardPageState extends State<GroupDashboardPage> {
                               const SizedBox(height: 8),
                               ...splitAmong.map((uid) {
                                 final name = userNames[uid] ?? uid;
-                                final status = approval[uid] ?? 'pending';
-                                final color = status == 'approved' || status == 'debt_created'
+                                final approvalStatus = approval[uid] ?? 'pending';
+                                final paidStatus = paymentStatus[uid] ?? 'unpaid';
+                                final statusLabel = paidStatus == 'paid' ? 'paid' : approvalStatus;
+                                final color = statusLabel == 'approved' || statusLabel == 'debt_created' || statusLabel == 'paid'
                                     ? const Color(0xFF90EE90)
                                     : Colors.pink;
                                 return Padding(
@@ -400,7 +382,7 @@ class _GroupDashboardPageState extends State<GroupDashboardPage> {
                                       const SizedBox(width: 4),
                                       Text(name),
                                       const SizedBox(width: 4),
-                                      Text('– $status', style: TextStyle(color: color)),
+                                      Text('– $statusLabel', style: TextStyle(color: color)),
                                     ],
                                   ),
                                 );

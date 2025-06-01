@@ -72,8 +72,6 @@ class _SignupPageState extends State<SignupPage> {
             counterSnap.exists ? (counterSnap.data()?['lastId'] ?? 0) : 0;
         int newId = lastId + 1;
         String newUserId = 'U${newId.toString().padLeft(3, '0')}';
-
-        // Set the user document
         transaction.set(
           FirebaseFirestore.instance.collection('users').doc(newUserId),
           {
@@ -85,12 +83,9 @@ class _SignupPageState extends State<SignupPage> {
             'groups': [],
           },
         );
-
-        // Update the counter
         transaction.set(counterRef, {'lastId': newId});
       });
 
-      // ✅ Auto-login and go to HomePage
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const HomePage()),
